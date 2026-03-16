@@ -44,3 +44,28 @@ export interface PostReceiveInventoryInput {
     note?: string;
   }>;
 }
+
+export interface PostMoveInventoryInput {
+  workspaceId: string;
+  sourceLocationId: string;
+  targetLocationId: string;
+  note?: string;
+  lines: Array<{
+    productId: string;
+    quantity: number;
+    barcode?: string;
+    note?: string;
+  }>;
+}
+
+export interface PostAdjustInventoryInput {
+  workspaceId: string;
+  locationId: string;
+  note?: string;
+  lines: Array<{
+    productId: string;
+    quantityDelta: number;
+    barcode?: string;
+    note?: string;
+  }>;
+}
