@@ -5,3 +5,7 @@ export { receiveInventory } from "./functions/receiveInventory";
 export { bootstrapWorkspace } from "./functions/bootstrapWorkspace";
 export { moveInventory } from "./functions/moveInventory";
 export { adjustInventory } from "./functions/adjustInventory";
+export { getInventoryBalances } from "./functions/getInventoryBalances";
+export { getProductByBarcode } from "./functions/getProductByBarcode";
+export { searchProducts } from "./functions/searchProducts";
+export { getLocationInventory } from "./functions/getLocationInventory";

@@ -8,6 +8,7 @@ export class ProductRepo {
     const ref = productsCol(workspaceId).doc();
 
     const sku = input.sku.trim().toUpperCase();
+    const name = input.name.trim();
 
     const existing = await productsCol(workspaceId)
       .where("sku", "==", sku)
@@ -20,7 +21,9 @@ export class ProductRepo {
 
     const doc: ProductDoc = {
       sku,
-      name: input.name.trim(),
+      skuLower: sku.toLowerCase(),
+      name,
+      nameLower: name.toLowerCase(),
       description: input.description?.trim() || "",
       primaryBarcode: input.primaryBarcode ?? null,
       barcodeAliases: input.barcodeAliases ?? [],

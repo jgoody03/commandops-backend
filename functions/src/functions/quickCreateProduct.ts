@@ -19,7 +19,10 @@ export const quickCreateProduct = onCall(async (request) => {
     : null;
 
   if (!workspaceId || !sku || !name) {
-    throw new HttpsError("invalid-argument", "workspaceId, sku, and name are required.");
+    throw new HttpsError(
+      "invalid-argument",
+      "workspaceId, sku, and name are required."
+    );
   }
 
   await assertWorkspaceMembership(workspaceId, request.auth.uid);

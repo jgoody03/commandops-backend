@@ -9,6 +9,7 @@ class ProductRepo {
         const now = firestore_1.Timestamp.now();
         const ref = (0, firestore_1.productsCol)(workspaceId).doc();
         const sku = input.sku.trim().toUpperCase();
+        const name = input.name.trim();
         const existing = await (0, firestore_1.productsCol)(workspaceId)
             .where("sku", "==", sku)
             .limit(1)
@@ -18,7 +19,9 @@ class ProductRepo {
         }
         const doc = {
             sku,
-            name: input.name.trim(),
+            skuLower: sku.toLowerCase(),
+            name,
+            nameLower: name.toLowerCase(),
             description: ((_a = input.description) === null || _a === void 0 ? void 0 : _a.trim()) || "",
             primaryBarcode: (_b = input.primaryBarcode) !== null && _b !== void 0 ? _b : null,
             barcodeAliases: (_c = input.barcodeAliases) !== null && _c !== void 0 ? _c : [],

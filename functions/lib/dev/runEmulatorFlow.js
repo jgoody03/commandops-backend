@@ -47,6 +47,41 @@ function castDoc(snap) {
         data: snap.data(),
     };
 }
+function assert(condition, message) {
+    if (!condition) {
+        throw new Error(message);
+    }
+}
+function expectNumberEqual(actual, expected, label) {
+    if (actual !== expected) {
+        throw new Error(`${label} mismatch. Expected ${expected}, got ${actual}`);
+    }
+}
+function expectStringEqual(actual, expected, label) {
+    if (actual !== expected) {
+        throw new Error(`${label} mismatch. Expected ${expected}, got ${actual}`);
+    }
+}
+function expectArrayLength(arr, expected, label) {
+    if (arr.length !== expected) {
+        throw new Error(`${label} mismatch. Expected ${expected}, got ${arr.length}`);
+    }
+}
+function expectDescendingUpdatedAt(items, label) {
+    var _a, _b;
+    for (let i = 1; i < items.length; i += 1) {
+        const prev = items[i - 1];
+        const curr = items[i];
+        const prevMs = (_a = prev.updatedAtMs) !== null && _a !== void 0 ? _a : 0;
+        const currMs = (_b = curr.updatedAtMs) !== null && _b !== void 0 ? _b : 0;
+        if (prevMs < currMs) {
+            throw new Error(`${label} sort order invalid at index ${i}. ${prev.id} (${prevMs}) came before ${curr.id} (${currMs}).`);
+        }
+        if (prevMs === currMs && prev.id < curr.id) {
+            throw new Error(`${label} tiebreak order invalid at index ${i}. Expected documentId desc for equal timestamps.`);
+        }
+    }
+}
 async function ensureSignedIn() {
     try {
         const cred = await (0, auth_1.createUserWithEmailAndPassword)(auth, TEST_EMAIL, TEST_PASSWORD);
@@ -124,18 +159,13 @@ async function readBalance(locationId, productId) {
     const data = balanceSnap.data();
     return Object.assign({ id: balanceSnap.id }, data);
 }
-function expectNumberEqual(actual, expected, label) {
-    if (actual !== expected) {
-        throw new Error(`${label} mismatch. Expected ${expected}, got ${actual}`);
-    }
-}
 async function callFunction(name, payload) {
     const callable = (0, functions_1.httpsCallable)(functions, name);
     const result = await callable(payload);
     return result.data;
 }
 async function main() {
-    var _a, _b, _c, _d, _e;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q, _r, _s, _t, _u, _v, _w;
     printSection("Starting CommandOps emulator flow");
     console.log("RUN_ID:", RUN_ID);
     console.log("WORKSPACE_ID:", WORKSPACE_ID);
@@ -200,7 +230,27 @@ async function main() {
         symbology: "ean13",
     });
     console.log(JSON.stringify(resolveResult, null, 2));
-    printSection("5) receiveInventory into MAIN");
+    printSection("5) getProductByBarcode");
+    const barcodeLookupResult = await callFunction("getProductByBarcode", {
+        workspaceId: WORKSPACE_ID,
+        barcode: BARCODE,
+    });
+    console.log(JSON.stringify(barcodeLookupResult, null, 2));
+    assert(barcodeLookupResult.found, "Expected barcode lookup to succeed.");
+    assert(barcodeLookupResult.product, "Expected product payload.");
+    expectStringEqual((_b = barcodeLookupResult.product) === null || _b === void 0 ? void 0 : _b.id, productId, "getProductByBarcode productId");
+    expectStringEqual((_c = barcodeLookupResult.product) === null || _c === void 0 ? void 0 : _c.sku, SKU, "getProductByBarcode sku");
+    expectStringEqual((_d = barcodeLookupResult.product) === null || _d === void 0 ? void 0 : _d.name, PRODUCT_NAME, "getProductByBarcode name");
+    expectStringEqual((_f = (_e = barcodeLookupResult.product) === null || _e === void 0 ? void 0 : _e.primaryBarcode) !== null && _f !== void 0 ? _f : null, BARCODE, "getProductByBarcode primaryBarcode");
+    printSection("6) getProductByBarcode - not found");
+    const missingBarcodeResult = await callFunction("getProductByBarcode", {
+        workspaceId: WORKSPACE_ID,
+        barcode: `missing-${RUN_ID}`,
+    });
+    console.log(JSON.stringify(missingBarcodeResult, null, 2));
+    assert(missingBarcodeResult.found === false, "Expected missing barcode lookup to return found=false.");
+    assert(missingBarcodeResult.product === null, "Expected missing barcode lookup to return null product.");
+    printSection("7) receiveInventory into MAIN");
     const receiveResult = await callFunction("receiveInventory", {
         workspaceId: WORKSPACE_ID,
         locationId: mainLocationId,
@@ -218,7 +268,7 @@ async function main() {
     const balanceAfterReceiveMain = await readBalance(mainLocationId, productId);
     console.log("\nBalance at MAIN after receive:");
     console.log(JSON.stringify(balanceAfterReceiveMain, null, 2));
-    printSection("6) moveInventory MAIN -> TRUCK1");
+    printSection("8) moveInventory MAIN -> TRUCK1");
     const moveResult = await callFunction("moveInventory", {
         workspaceId: WORKSPACE_ID,
         sourceLocationId: mainLocationId,
@@ -233,7 +283,7 @@ async function main() {
         ],
     });
     console.log(JSON.stringify(moveResult, null, 2));
-    printSection("7) verify balances after move");
+    printSection("9) verify balances after move");
     const mainBalanceAfterMove = await readBalance(mainLocationId, productId);
     const truckBalanceAfterMove = await readBalance(truck1LocationId, productId);
     console.log("\nMAIN balance after move:");
@@ -242,15 +292,15 @@ async function main() {
     console.log(JSON.stringify(truckBalanceAfterMove, null, 2));
     const expectedMainAfterMove = RECEIVE_QTY - MOVE_QTY;
     const expectedTruckAfterMove = MOVE_QTY;
-    const actualMainAfterMove = (_b = mainBalanceAfterMove === null || mainBalanceAfterMove === void 0 ? void 0 : mainBalanceAfterMove.onHand) !== null && _b !== void 0 ? _b : null;
-    const actualTruckAfterMove = (_c = truckBalanceAfterMove === null || truckBalanceAfterMove === void 0 ? void 0 : truckBalanceAfterMove.onHand) !== null && _c !== void 0 ? _c : null;
+    const actualMainAfterMove = (_g = mainBalanceAfterMove === null || mainBalanceAfterMove === void 0 ? void 0 : mainBalanceAfterMove.onHand) !== null && _g !== void 0 ? _g : null;
+    const actualTruckAfterMove = (_h = truckBalanceAfterMove === null || truckBalanceAfterMove === void 0 ? void 0 : truckBalanceAfterMove.onHand) !== null && _h !== void 0 ? _h : null;
     console.log("\nExpected MAIN onHand after move:", expectedMainAfterMove);
     console.log("Actual   MAIN onHand after move:", actualMainAfterMove);
     console.log("Expected TRUCK1 onHand after move:", expectedTruckAfterMove);
     console.log("Actual   TRUCK1 onHand after move:", actualTruckAfterMove);
     expectNumberEqual(actualMainAfterMove, expectedMainAfterMove, "MAIN balance after move");
     expectNumberEqual(actualTruckAfterMove, expectedTruckAfterMove, "TRUCK1 balance after move");
-    printSection("8) adjustInventory on TRUCK1");
+    printSection("10) adjustInventory on TRUCK1");
     const adjustResult = await callFunction("adjustInventory", {
         workspaceId: WORKSPACE_ID,
         locationId: truck1LocationId,
@@ -265,7 +315,7 @@ async function main() {
         ],
     });
     console.log(JSON.stringify(adjustResult, null, 2));
-    printSection("9) verify balances after adjustment");
+    printSection("11) verify balances after adjustment");
     const finalMainBalance = await readBalance(mainLocationId, productId);
     const finalTruckBalance = await readBalance(truck1LocationId, productId);
     console.log("\nMAIN balance after adjustment:");
@@ -274,14 +324,106 @@ async function main() {
     console.log(JSON.stringify(finalTruckBalance, null, 2));
     const expectedMainFinal = RECEIVE_QTY - MOVE_QTY;
     const expectedTruckFinal = MOVE_QTY + ADJUST_DELTA;
-    const actualMainFinal = (_d = finalMainBalance === null || finalMainBalance === void 0 ? void 0 : finalMainBalance.onHand) !== null && _d !== void 0 ? _d : null;
-    const actualTruckFinal = (_e = finalTruckBalance === null || finalTruckBalance === void 0 ? void 0 : finalTruckBalance.onHand) !== null && _e !== void 0 ? _e : null;
+    const actualMainFinal = (_j = finalMainBalance === null || finalMainBalance === void 0 ? void 0 : finalMainBalance.onHand) !== null && _j !== void 0 ? _j : null;
+    const actualTruckFinal = (_k = finalTruckBalance === null || finalTruckBalance === void 0 ? void 0 : finalTruckBalance.onHand) !== null && _k !== void 0 ? _k : null;
     console.log("\nExpected MAIN onHand final:", expectedMainFinal);
     console.log("Actual   MAIN onHand final:", actualMainFinal);
     console.log("Expected TRUCK1 onHand final:", expectedTruckFinal);
     console.log("Actual   TRUCK1 onHand final:", actualTruckFinal);
     expectNumberEqual(actualMainFinal, expectedMainFinal, "MAIN final balance");
     expectNumberEqual(actualTruckFinal, expectedTruckFinal, "TRUCK1 final balance");
+    printSection("12) getInventoryBalances - all balances");
+    const allBalances = await callFunction("getInventoryBalances", {
+        workspaceId: WORKSPACE_ID,
+        limit: 10,
+    });
+    console.log(JSON.stringify(allBalances, null, 2));
+    expectArrayLength(allBalances.items, 2, "all balances item count");
+    expectDescendingUpdatedAt(allBalances.items, "all balances");
+    const allBalanceIds = allBalances.items.map((item) => item.id).sort();
+    const expectedBalanceIds = [
+        makeBalanceId(mainLocationId, productId),
+        makeBalanceId(truck1LocationId, productId),
+    ].sort();
+    expectStringEqual(JSON.stringify(allBalanceIds), JSON.stringify(expectedBalanceIds), "all balances ids");
+    const mainBalanceFromApi = allBalances.items.find((item) => item.locationId === mainLocationId && item.productId === productId);
+    const truckBalanceFromApi = allBalances.items.find((item) => item.locationId === truck1LocationId && item.productId === productId);
+    assert(mainBalanceFromApi, "MAIN balance missing from getInventoryBalances.");
+    assert(truckBalanceFromApi, "TRUCK1 balance missing from getInventoryBalances.");
+    expectNumberEqual((_l = mainBalanceFromApi === null || mainBalanceFromApi === void 0 ? void 0 : mainBalanceFromApi.onHand) !== null && _l !== void 0 ? _l : null, expectedMainFinal, "getInventoryBalances MAIN onHand");
+    expectNumberEqual((_m = truckBalanceFromApi === null || truckBalanceFromApi === void 0 ? void 0 : truckBalanceFromApi.onHand) !== null && _m !== void 0 ? _m : null, expectedTruckFinal, "getInventoryBalances TRUCK1 onHand");
+    printSection("13) getInventoryBalances - filter by locationId");
+    const mainOnlyBalances = await callFunction("getInventoryBalances", {
+        workspaceId: WORKSPACE_ID,
+        locationId: mainLocationId,
+        limit: 10,
+    });
+    console.log(JSON.stringify(mainOnlyBalances, null, 2));
+    expectArrayLength(mainOnlyBalances.items, 1, "main-only balances item count");
+    expectStringEqual((_o = mainOnlyBalances.items[0]) === null || _o === void 0 ? void 0 : _o.locationId, mainLocationId, "main-only locationId");
+    expectStringEqual((_p = mainOnlyBalances.items[0]) === null || _p === void 0 ? void 0 : _p.productId, productId, "main-only productId");
+    expectNumberEqual((_r = (_q = mainOnlyBalances.items[0]) === null || _q === void 0 ? void 0 : _q.onHand) !== null && _r !== void 0 ? _r : null, expectedMainFinal, "main-only onHand");
+    printSection("14) getInventoryBalances - filter by productId");
+    const productOnlyBalances = await callFunction("getInventoryBalances", {
+        workspaceId: WORKSPACE_ID,
+        productId,
+        limit: 10,
+    });
+    console.log(JSON.stringify(productOnlyBalances, null, 2));
+    expectArrayLength(productOnlyBalances.items, 2, "product-only balances item count");
+    for (const item of productOnlyBalances.items) {
+        expectStringEqual(item.productId, productId, "product-only productId");
+    }
+    printSection("15) getInventoryBalances - pagination");
+    const firstPage = await callFunction("getInventoryBalances", {
+        workspaceId: WORKSPACE_ID,
+        limit: 1,
+    });
+    console.log("First page:");
+    console.log(JSON.stringify(firstPage, null, 2));
+    expectArrayLength(firstPage.items, 1, "first page item count");
+    assert(firstPage.nextCursor, "Expected nextCursor on first page.");
+    const secondPage = await callFunction("getInventoryBalances", {
+        workspaceId: WORKSPACE_ID,
+        limit: 1,
+        cursor: firstPage.nextCursor,
+    });
+    console.log("Second page:");
+    console.log(JSON.stringify(secondPage, null, 2));
+    expectArrayLength(secondPage.items, 1, "second page item count");
+    const firstPageId = (_s = firstPage.items[0]) === null || _s === void 0 ? void 0 : _s.id;
+    const secondPageId = (_t = secondPage.items[0]) === null || _t === void 0 ? void 0 : _t.id;
+    assert(firstPageId, "Missing first page item id.");
+    assert(secondPageId, "Missing second page item id.");
+    assert(firstPageId !== secondPageId, "Pagination returned duplicate items.");
+    const pagedIds = [firstPageId, secondPageId].sort();
+    expectStringEqual(JSON.stringify(pagedIds), JSON.stringify(expectedBalanceIds), "paged ids");
+    printSection("16) searchProducts");
+    const searchProductsResult = await callFunction("searchProducts", {
+        workspaceId: WORKSPACE_ID,
+        query: SKU.slice(0, 4),
+        limit: 10,
+    });
+    console.log(JSON.stringify(searchProductsResult, null, 2));
+    assert(searchProductsResult.items.length >= 1, "Expected at least one product search result.");
+    const searchedProduct = searchProductsResult.items.find((item) => item.id === productId);
+    assert(searchedProduct, "Expected created product in search results.");
+    expectStringEqual(searchedProduct === null || searchedProduct === void 0 ? void 0 : searchedProduct.sku, SKU, "searchProducts sku");
+    expectStringEqual(searchedProduct === null || searchedProduct === void 0 ? void 0 : searchedProduct.name, PRODUCT_NAME, "searchProducts name");
+    printSection("17) getLocationInventory");
+    const locationInventoryResult = await callFunction("getLocationInventory", {
+        workspaceId: WORKSPACE_ID,
+        locationId: truck1LocationId,
+        limit: 10,
+    });
+    console.log(JSON.stringify(locationInventoryResult, null, 2));
+    assert(locationInventoryResult.items.length >= 1, "Expected at least one location inventory result.");
+    const truckInventoryItem = locationInventoryResult.items.find((item) => item.productId === productId);
+    assert(truckInventoryItem, "Expected created product in truck location inventory.");
+    expectStringEqual(truckInventoryItem === null || truckInventoryItem === void 0 ? void 0 : truckInventoryItem.locationId, truck1LocationId, "getLocationInventory locationId");
+    expectNumberEqual((_u = truckInventoryItem === null || truckInventoryItem === void 0 ? void 0 : truckInventoryItem.onHand) !== null && _u !== void 0 ? _u : null, expectedTruckFinal, "getLocationInventory onHand");
+    expectStringEqual((_v = truckInventoryItem === null || truckInventoryItem === void 0 ? void 0 : truckInventoryItem.product) === null || _v === void 0 ? void 0 : _v.sku, SKU, "getLocationInventory product sku");
+    expectStringEqual((_w = truckInventoryItem === null || truckInventoryItem === void 0 ? void 0 : truckInventoryItem.product) === null || _w === void 0 ? void 0 : _w.name, PRODUCT_NAME, "getLocationInventory product name");
     printSection("Flow complete");
     console.log("All emulator flow checks passed.");
 }

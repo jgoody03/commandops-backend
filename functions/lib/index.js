@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.adjustInventory = exports.moveInventory = exports.bootstrapWorkspace = exports.receiveInventory = exports.quickCreateProduct = exports.resolveScanCode = exports.getMyWorkspaceContext = void 0;
+exports.getLocationInventory = exports.searchProducts = exports.getProductByBarcode = exports.getInventoryBalances = exports.adjustInventory = exports.moveInventory = exports.bootstrapWorkspace = exports.receiveInventory = exports.quickCreateProduct = exports.resolveScanCode = exports.getMyWorkspaceContext = void 0;
 var getMyWorkspaceContext_1 = require("./functions/getMyWorkspaceContext");
 Object.defineProperty(exports, "getMyWorkspaceContext", { enumerable: true, get: function () { return getMyWorkspaceContext_1.getMyWorkspaceContext; } });
 var resolveScanCode_1 = require("./functions/resolveScanCode");
@@ -15,4 +15,12 @@ var moveInventory_1 = require("./functions/moveInventory");
 Object.defineProperty(exports, "moveInventory", { enumerable: true, get: function () { return moveInventory_1.moveInventory; } });
 var adjustInventory_1 = require("./functions/adjustInventory");
 Object.defineProperty(exports, "adjustInventory", { enumerable: true, get: function () { return adjustInventory_1.adjustInventory; } });
+var getInventoryBalances_1 = require("./functions/getInventoryBalances");
+Object.defineProperty(exports, "getInventoryBalances", { enumerable: true, get: function () { return getInventoryBalances_1.getInventoryBalances; } });
+var getProductByBarcode_1 = require("./functions/getProductByBarcode");
+Object.defineProperty(exports, "getProductByBarcode", { enumerable: true, get: function () { return getProductByBarcode_1.getProductByBarcode; } });
+var searchProducts_1 = require("./functions/searchProducts");
+Object.defineProperty(exports, "searchProducts", { enumerable: true, get: function () { return searchProducts_1.searchProducts; } });
+var getLocationInventory_1 = require("./functions/getLocationInventory");
+Object.defineProperty(exports, "getLocationInventory", { enumerable: true, get: function () { return getLocationInventory_1.getLocationInventory; } });
 //# sourceMappingURL=index.js.map

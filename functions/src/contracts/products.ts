@@ -3,7 +3,9 @@ import { ProductUnit } from "./enums";
 
 export interface ProductDoc {
   sku: string;
+  skuLower: string;
   name: string;
+  nameLower: string;
   description?: string;
   primaryBarcode?: string | null;
   barcodeAliases?: string[];

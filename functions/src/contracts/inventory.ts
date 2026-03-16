@@ -7,6 +7,7 @@ export interface InventoryBalanceDoc {
   productId: string;
   onHand: number;
   available: number;
+  hasStock: boolean;
   lastTransactionAt?: Timestamp;
   updatedAt: Timestamp;
 }
