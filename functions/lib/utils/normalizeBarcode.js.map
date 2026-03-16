@@ -1,0 +1,1 @@
+{"version":3,"file":"normalizeBarcode.js","sourceRoot":"","sources":["../../src/utils/normalizeBarcode.ts"],"names":[],"mappings":";;AAAA,4CAEC;AAFD,SAAgB,gBAAgB,CAAC,KAAa;IAC5C,OAAO,KAAK,CAAC,IAAI,EAAE,CAAC,OAAO,CAAC,MAAM,EAAE,EAAE,CAAC,CAAC,WAAW,EAAE,CAAC;AACxD,CAAC"}
