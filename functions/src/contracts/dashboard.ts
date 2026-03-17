@@ -110,6 +110,77 @@ export type GetTodaySnapshotPayload = {
   workspaceId: string;
 };
 
+export type GetLowStockProductsPayload = {
+  workspaceId: string;
+  limit?: number;
+  cursor?: SummaryListCursor | null;
+  query?: string;
+  outOnly?: boolean;
+};
+
+export type GetLowStockProductsResult = {
+  items: ProductSummaryListItem[];
+  nextCursor: SummaryListCursor | null;
+};
+
+export type LocationDetailInventoryItem = {
+  id: string;
+  workspaceId: string;
+  locationId: string;
+  productId: string;
+  sku: string;
+  name: string;
+  primaryBarcode?: string | null;
+  unit?: string | null;
+  onHand: number;
+  available: number;
+  isOutOfStock: boolean;
+  isLowStock: boolean;
+  stockStatus: "ok" | "low" | "out";
+  lastTransactionAtMs: number | null;
+  updatedAtMs: number | null;
+};
+
+export type GetLocationDetailSnapshotPayload = {
+  workspaceId: string;
+  locationId: string;
+  inventoryLimit?: number;
+  activityLimit?: number;
+};
+
+export type GetLocationDetailSnapshotResult = {
+  summary: LocationSummaryListItem | null;
+  lowStockItems: LocationDetailInventoryItem[];
+  outOfStockItems: LocationDetailInventoryItem[];
+  topItems: LocationDetailInventoryItem[];
+  recentActivity: RecentActivityFeedItem[];
+  generatedAtMs: number;
+};
+
+export type IngestPosSaleLine = {
+  productId: string;
+  quantity: number;
+  barcode?: string;
+  note?: string;
+};
+
+export type IngestPosSalePayload = {
+  workspaceId: string;
+  locationId: string;
+  saleId?: string;
+  orderNumber?: string;
+  note?: string;
+  lines: IngestPosSaleLine[];
+};
+
+export type IngestPosSaleResult = {
+  ok: boolean;
+  transactionId: string;
+  postedAt: string;
+  lineCount: number;
+  locationId: string;
+};
+
 export type GetTodaySnapshotResult = {
   totals: {
     totalProducts: number;

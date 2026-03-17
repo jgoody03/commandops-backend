@@ -171,6 +171,84 @@ class TransactionPostingService {
             locationId: input.locationId,
         };
     }
+    async postSale(input, postedBy, requestId) {
+        var _a;
+        if (!input.lines.length) {
+            throw new https_1.HttpsError("invalid-argument", "At least one line is required.");
+        }
+        const location = await this.locationRepo.assertActive(input.workspaceId, input.locationId);
+        const hydratedLines = [];
+        for (const line of input.lines) {
+            if (!Number.isFinite(line.quantity) || line.quantity <= 0) {
+                throw new https_1.HttpsError("invalid-argument", "Sale quantity must be greater than zero.");
+            }
+            const product = await this.productRepo.getById(input.workspaceId, line.productId);
+            hydratedLines.push(Object.assign(Object.assign({ productId: line.productId, sku: product.sku, quantity: line.quantity, barcode: (_a = line.barcode) !== null && _a !== void 0 ? _a : null }, (line.note ? { note: line.note } : {})), { product }));
+        }
+        const postedAt = firestore_1.Timestamp.now();
+        const transactionId = await firestore_1.db.runTransaction(async (tx) => {
+            var _a, _b, _c, _d, _e, _f, _g;
+            for (const line of hydratedLines) {
+                const balance = await this.balanceRepo.getInTransaction(tx, input.workspaceId, input.locationId, line.productId);
+                const currentOnHand = (_a = balance === null || balance === void 0 ? void 0 : balance.onHand) !== null && _a !== void 0 ? _a : 0;
+                const currentAvailable = (_b = balance === null || balance === void 0 ? void 0 : balance.available) !== null && _b !== void 0 ? _b : 0;
+                if (currentOnHand < line.quantity ||
+                    currentAvailable < line.quantity) {
+                    throw new https_1.HttpsError("failed-precondition", `Insufficient inventory for SKU ${line.sku} at sale location.`);
+                }
+            }
+            for (const line of hydratedLines) {
+                const balance = await this.balanceRepo.getInTransaction(tx, input.workspaceId, input.locationId, line.productId);
+                const currentOnHand = (_c = balance === null || balance === void 0 ? void 0 : balance.onHand) !== null && _c !== void 0 ? _c : 0;
+                const currentAvailable = (_d = balance === null || balance === void 0 ? void 0 : balance.available) !== null && _d !== void 0 ? _d : 0;
+                const nextOnHand = currentOnHand - line.quantity;
+                const nextAvailable = currentAvailable - line.quantity;
+                if (nextOnHand < 0 || nextAvailable < 0) {
+                    throw new https_1.HttpsError("failed-precondition", `Inventory would go negative for SKU ${line.sku} at sale location.`);
+                }
+                this.balanceRepo.setAbsoluteInTransaction(tx, {
+                    workspaceId: input.workspaceId,
+                    location,
+                    product: line.product,
+                    onHand: nextOnHand,
+                    available: nextAvailable,
+                    transactionAt: postedAt,
+                });
+            }
+            return this.transactionRepo.createInTransaction(tx, input.workspaceId, {
+                type: "sale",
+                referenceType: "api",
+                sourceLocationId: input.locationId,
+                targetLocationId: null,
+                note: (_g = (_f = (_e = input.note) !== null && _e !== void 0 ? _e : input.orderNumber) !== null && _f !== void 0 ? _f : input.saleId) !== null && _g !== void 0 ? _g : "",
+                postedBy,
+                postedAt,
+                requestId,
+                relatedTransactionGroupId: null,
+            }, hydratedLines.map((line) => {
+                var _a;
+                return (Object.assign({ productId: line.productId, sku: line.sku, quantity: line.quantity, barcode: (_a = line.barcode) !== null && _a !== void 0 ? _a : null }, (line.note ? { note: line.note } : {})));
+            }));
+        });
+        await this.refreshProductSummaries(input.workspaceId, hydratedLines.map((line) => line.productId));
+        await this.refreshLocationSummary(input.workspaceId, location);
+        await this.recentActivityRepo.create(input.workspaceId, (0, buildRecentActivity_1.buildRecentActivity)({
+            workspaceId: input.workspaceId,
+            type: "sale",
+            title: `Sold ${hydratedLines.length} item${hydratedLines.length === 1 ? "" : "s"}`,
+            subtitle: location.name,
+            locationId: location.id,
+            actorUserId: postedBy,
+            createdAt: postedAt,
+        }));
+        return {
+            ok: true,
+            transactionId,
+            postedAt: postedAt.toDate().toISOString(),
+            lineCount: hydratedLines.length,
+            locationId: input.locationId,
+        };
+    }
     async postMove(input, postedBy, requestId) {
         var _a;
         if (!input.lines.length) {

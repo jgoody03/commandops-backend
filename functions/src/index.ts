@@ -13,3 +13,6 @@ export { getProductSummaryList } from "./functions/getProductSummaryList";
 export { getLocationSummaryList } from "./functions/getLocationSummaryList";
 export { getRecentActivityFeed } from "./functions/getRecentActivityFeed";
 export { getTodaySnapshot } from "./functions/getTodaySnapshot";
+export { getLowStockProducts } from "./functions/getLowStockProducts";
+export { getLocationDetailSnapshot } from "./functions/getLocationDetailSnapshot";
+export { ingestPosSale } from "./functions/ingestPosSale";

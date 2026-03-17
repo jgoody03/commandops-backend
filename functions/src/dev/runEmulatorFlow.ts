@@ -60,10 +60,9 @@ const TEST_PASSWORD = process.env.TEST_PASSWORD || "CommandOps123!";
 const WORKSPACE_ID = process.env.WORKSPACE_ID || `demo-workspace-${RUN_ID}`;
 const WORKSPACE_NAME =
   process.env.WORKSPACE_NAME || `Demo Workspace ${RUN_ID}`;
-
+const SALE_QTY = Number(process.env.SALE_QTY || 2);
 const MAIN_CODE = "MAIN";
 const TRUCK1_CODE = "TRUCK1";
-
 const SKU = process.env.SKU || "TONER-001";
 const PRODUCT_NAME = process.env.PRODUCT_NAME || "Black Toner Cartridge";
 const BARCODE = process.env.BARCODE || "123456789012";
@@ -372,6 +371,53 @@ type SummaryListCursor = {
   docId: string;
 };
 
+type GetLowStockProductsPayload = {
+  workspaceId: string;
+  limit?: number;
+  cursor?: SummaryListCursor | null;
+  query?: string;
+  outOnly?: boolean;
+};
+
+type GetLowStockProductsResult = {
+  items: ProductSummaryListItem[];
+  nextCursor: SummaryListCursor | null;
+};
+
+type LocationDetailInventoryItem = {
+  id: string;
+  workspaceId: string;
+  locationId: string;
+  productId: string;
+  sku: string;
+  name: string;
+  primaryBarcode?: string | null;
+  unit?: string | null;
+  onHand: number;
+  available: number;
+  isOutOfStock: boolean;
+  isLowStock: boolean;
+  stockStatus: "ok" | "low" | "out";
+  lastTransactionAtMs: number | null;
+  updatedAtMs: number | null;
+};
+
+type GetLocationDetailSnapshotPayload = {
+  workspaceId: string;
+  locationId: string;
+  inventoryLimit?: number;
+  activityLimit?: number;
+};
+
+type GetLocationDetailSnapshotResult = {
+  summary: LocationSummaryListItem | null;
+  lowStockItems: LocationDetailInventoryItem[];
+  outOfStockItems: LocationDetailInventoryItem[];
+  topItems: LocationDetailInventoryItem[];
+  recentActivity: RecentActivityFeedItem[];
+  generatedAtMs: number;
+};
+
 type ActivityFeedCursor = {
   createdAtMs: number;
   docId: string;
@@ -396,6 +442,28 @@ type ProductSummaryListItem = {
   stockStatus: "ok" | "low" | "out";
   lastTransactionAtMs: number | null;
   updatedAtMs: number | null;
+};
+
+type IngestPosSalePayload = {
+  workspaceId: string;
+  locationId: string;
+  saleId?: string;
+  orderNumber?: string;
+  note?: string;
+  lines: Array<{
+    productId: string;
+    quantity: number;
+    barcode?: string;
+    note?: string;
+  }>;
+};
+
+type IngestPosSaleResult = {
+  ok: boolean;
+  transactionId: string;
+  postedAt: string;
+  lineCount: number;
+  locationId: string;
 };
 
 type GetProductSummaryListPayload = {
@@ -825,6 +893,9 @@ async function main(): Promise<void> {
     throw new Error(
       `Adjustment would make TRUCK1 negative. MOVE_QTY=${MOVE_QTY}, ADJUST_DELTA=${ADJUST_DELTA}`
     );
+  }
+  if (!Number.isFinite(SALE_QTY) || SALE_QTY <= 0) {
+    throw new Error(`Invalid SALE_QTY: ${SALE_QTY}`);
   }
 
   const user = await ensureSignedIn();
@@ -1593,6 +1664,139 @@ expectStringEqual(
     todaySnapshot.recentActivity.length >= 3,
     "Expected recent activity preview in today snapshot."
   );
+    printSection("25) getLowStockProducts");
+  const lowStockProducts = await callFunction<
+    GetLowStockProductsPayload,
+    GetLowStockProductsResult
+  >("getLowStockProducts", {
+    workspaceId: WORKSPACE_ID,
+    limit: 10,
+  });
+
+  console.log(JSON.stringify(lowStockProducts, null, 2));
+
+  assert(
+    Array.isArray(lowStockProducts.items),
+    "Expected low stock products items array."
+  );
+    printSection("26) getLocationDetailSnapshot");
+  const locationDetailSnapshot = await callFunction<
+    GetLocationDetailSnapshotPayload,
+    GetLocationDetailSnapshotResult
+  >("getLocationDetailSnapshot", {
+    workspaceId: WORKSPACE_ID,
+    locationId: truck1LocationId,
+    inventoryLimit: 10,
+    activityLimit: 10,
+  });
+
+  console.log(JSON.stringify(locationDetailSnapshot, null, 2));
+
+  assert(
+    locationDetailSnapshot.summary,
+    "Expected location detail snapshot summary."
+  );
+
+  expectStringEqual(
+    locationDetailSnapshot.summary?.locationId,
+    truck1LocationId,
+    "location detail summary locationId"
+  );
+
+  const topItem = locationDetailSnapshot.topItems.find(
+    (item) => item.productId === productId
+  );
+
+  assert(topItem, "Expected created product in location detail topItems.");
+
+  expectNumberEqual(
+    topItem?.onHand ?? null,
+    expectedTruckFinal,
+    "location detail top item onHand"
+  );
+
+    if (SALE_QTY > expectedTruckFinal) {
+    throw new Error(
+      `SALE_QTY (${SALE_QTY}) cannot be greater than TRUCK1 stock (${expectedTruckFinal}).`
+    );
+  }
+
+  printSection("27) ingestPosSale");
+  const saleResult = await callFunction<
+    IngestPosSalePayload,
+    IngestPosSaleResult
+  >("ingestPosSale", {
+    workspaceId: WORKSPACE_ID,
+    locationId: truck1LocationId,
+    saleId: `sale-${RUN_ID}`,
+    orderNumber: `order-${RUN_ID}`,
+    note: `POS sale for ${RUN_ID}`,
+    lines: [
+      {
+        productId,
+        quantity: SALE_QTY,
+        barcode: BARCODE,
+      },
+    ],
+  });
+
+  console.log(JSON.stringify(saleResult, null, 2));
+
+  expectNumberEqual(saleResult.lineCount, 1, "ingestPosSale lineCount");
+  expectStringEqual(
+    saleResult.locationId,
+    truck1LocationId,
+    "ingestPosSale locationId"
+  );
+
+    printSection("28) verify balances after sale");
+  const truckBalanceAfterSale = await readBalance(truck1LocationId, productId);
+  const expectedTruckAfterSale = expectedTruckFinal - SALE_QTY;
+
+  console.log(JSON.stringify(truckBalanceAfterSale, null, 2));
+
+  expectNumberEqual(
+    truckBalanceAfterSale?.onHand ?? null,
+    expectedTruckAfterSale,
+    "TRUCK1 balance after sale"
+  );
+
+    printSection("29) verify summaries after sale");
+  const productSummaryAfterSale = await readProductInventorySummary(productId);
+  const truckLocationSummaryAfterSale = await readLocationInventorySummary(
+    truck1LocationId
+  );
+
+  console.log(JSON.stringify(productSummaryAfterSale, null, 2));
+  console.log(JSON.stringify(truckLocationSummaryAfterSale, null, 2));
+
+  assert(productSummaryAfterSale, "Expected product summary after sale.");
+  assert(
+    truckLocationSummaryAfterSale,
+    "Expected truck location summary after sale."
+  );
+
+  expectNumberEqual(
+    productSummaryAfterSale?.totalOnHand ?? null,
+    expectedMainFinal + (expectedTruckFinal - SALE_QTY),
+    "product summary totalOnHand after sale"
+  );
+
+  expectNumberEqual(
+    truckLocationSummaryAfterSale?.totalUnits ?? null,
+    expectedTruckFinal - SALE_QTY,
+    "truck location summary totalUnits after sale"
+  );
+
+    printSection("30) verify activity after sale");
+  const recentActivityAfterSale = await readRecentActivity();
+
+  console.log(JSON.stringify(recentActivityAfterSale, null, 2));
+
+  const activityTypesAfterSale = recentActivityAfterSale.map((item) => item.type);
+  assert(activityTypesAfterSale.includes("sale"), "Expected sale activity.");
+
+  
   printSection("Flow complete");
   console.log("All emulator flow checks passed.");
 }

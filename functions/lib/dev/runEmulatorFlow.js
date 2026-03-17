@@ -201,7 +201,7 @@ async function callFunction(name, payload) {
     return result.data;
 }
 async function main() {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, _18, _19;
     printSection("Starting CommandOps emulator flow");
     console.log("RUN_ID:", RUN_ID);
     console.log("WORKSPACE_ID:", WORKSPACE_ID);
@@ -570,6 +570,26 @@ async function main() {
     expectNumberEqual(todaySnapshot.activity.moveCount, 1, "today snapshot moveCount");
     expectNumberEqual(todaySnapshot.activity.adjustCount, 1, "today snapshot adjustCount");
     assert(todaySnapshot.recentActivity.length >= 3, "Expected recent activity preview in today snapshot.");
+    printSection("25) getLowStockProducts");
+    const lowStockProducts = await callFunction("getLowStockProducts", {
+        workspaceId: WORKSPACE_ID,
+        limit: 10,
+    });
+    console.log(JSON.stringify(lowStockProducts, null, 2));
+    assert(Array.isArray(lowStockProducts.items), "Expected low stock products items array.");
+    printSection("26) getLocationDetailSnapshot");
+    const locationDetailSnapshot = await callFunction("getLocationDetailSnapshot", {
+        workspaceId: WORKSPACE_ID,
+        locationId: truck1LocationId,
+        inventoryLimit: 10,
+        activityLimit: 10,
+    });
+    console.log(JSON.stringify(locationDetailSnapshot, null, 2));
+    assert(locationDetailSnapshot.summary, "Expected location detail snapshot summary.");
+    expectStringEqual((_18 = locationDetailSnapshot.summary) === null || _18 === void 0 ? void 0 : _18.locationId, truck1LocationId, "location detail summary locationId");
+    const topItem = locationDetailSnapshot.topItems.find((item) => item.productId === productId);
+    assert(topItem, "Expected created product in location detail topItems.");
+    expectNumberEqual((_19 = topItem === null || topItem === void 0 ? void 0 : topItem.onHand) !== null && _19 !== void 0 ? _19 : null, expectedTruckFinal, "location detail top item onHand");
     printSection("Flow complete");
     console.log("All emulator flow checks passed.");
 }

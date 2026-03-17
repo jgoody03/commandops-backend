@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getTodaySnapshot = exports.getRecentActivityFeed = exports.getLocationSummaryList = exports.getProductSummaryList = exports.getLocationInventory = exports.searchProducts = exports.getProductByBarcode = exports.getInventoryBalances = exports.adjustInventory = exports.moveInventory = exports.bootstrapWorkspace = exports.receiveInventory = exports.quickCreateProduct = exports.resolveScanCode = exports.getMyWorkspaceContext = void 0;
+exports.ingestPosSale = exports.getLocationDetailSnapshot = exports.getLowStockProducts = exports.getTodaySnapshot = exports.getRecentActivityFeed = exports.getLocationSummaryList = exports.getProductSummaryList = exports.getLocationInventory = exports.searchProducts = exports.getProductByBarcode = exports.getInventoryBalances = exports.adjustInventory = exports.moveInventory = exports.bootstrapWorkspace = exports.receiveInventory = exports.quickCreateProduct = exports.resolveScanCode = exports.getMyWorkspaceContext = void 0;
 var getMyWorkspaceContext_1 = require("./functions/getMyWorkspaceContext");
 Object.defineProperty(exports, "getMyWorkspaceContext", { enumerable: true, get: function () { return getMyWorkspaceContext_1.getMyWorkspaceContext; } });
 var resolveScanCode_1 = require("./functions/resolveScanCode");
@@ -31,4 +31,10 @@ var getRecentActivityFeed_1 = require("./functions/getRecentActivityFeed");
 Object.defineProperty(exports, "getRecentActivityFeed", { enumerable: true, get: function () { return getRecentActivityFeed_1.getRecentActivityFeed; } });
 var getTodaySnapshot_1 = require("./functions/getTodaySnapshot");
 Object.defineProperty(exports, "getTodaySnapshot", { enumerable: true, get: function () { return getTodaySnapshot_1.getTodaySnapshot; } });
+var getLowStockProducts_1 = require("./functions/getLowStockProducts");
+Object.defineProperty(exports, "getLowStockProducts", { enumerable: true, get: function () { return getLowStockProducts_1.getLowStockProducts; } });
+var getLocationDetailSnapshot_1 = require("./functions/getLocationDetailSnapshot");
+Object.defineProperty(exports, "getLocationDetailSnapshot", { enumerable: true, get: function () { return getLocationDetailSnapshot_1.getLocationDetailSnapshot; } });
+var ingestPosSale_1 = require("./functions/ingestPosSale");
+Object.defineProperty(exports, "ingestPosSale", { enumerable: true, get: function () { return ingestPosSale_1.ingestPosSale; } });
 //# sourceMappingURL=index.js.map

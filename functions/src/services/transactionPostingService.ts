@@ -4,7 +4,9 @@ import {
   PostAdjustInventoryInput,
   PostMoveInventoryInput,
   PostReceiveInventoryInput,
+  PostSaleInventoryInput,
 } from "../contracts/inventory";
+
 import { LocationRepo } from "../repositories/locationRepo";
 import { ProductRepo } from "../repositories/productRepo";
 import { InventoryBalanceRepo } from "../repositories/inventoryBalanceRepo";
@@ -21,6 +23,15 @@ type HydratedReceiveLine = {
   sku: string;
   quantity: number;
   unitCost?: number | null;
+  barcode?: string | null;
+  note?: string;
+  product: Awaited<ReturnType<ProductRepo["getById"]>>;
+};
+
+type HydratedSaleLine = {
+  productId: string;
+  sku: string;
+  quantity: number;
   barcode?: string | null;
   note?: string;
   product: Awaited<ReturnType<ProductRepo["getById"]>>;
@@ -336,6 +347,160 @@ export class TransactionPostingService {
     };
   }
 
+    async postSale(
+    input: PostSaleInventoryInput,
+    postedBy: string,
+    requestId: string
+  ) {
+    if (!input.lines.length) {
+      throw new HttpsError("invalid-argument", "At least one line is required.");
+    }
+
+    const location = await this.locationRepo.assertActive(
+      input.workspaceId,
+      input.locationId
+    );
+
+    const hydratedLines: HydratedSaleLine[] = [];
+
+    for (const line of input.lines) {
+      if (!Number.isFinite(line.quantity) || line.quantity <= 0) {
+        throw new HttpsError(
+          "invalid-argument",
+          "Sale quantity must be greater than zero."
+        );
+      }
+
+      const product = await this.productRepo.getById(
+        input.workspaceId,
+        line.productId
+      );
+
+      hydratedLines.push({
+        productId: line.productId,
+        sku: product.sku,
+        quantity: line.quantity,
+        barcode: line.barcode ?? null,
+        ...(line.note ? { note: line.note } : {}),
+        product,
+      });
+    }
+
+    const postedAt = Timestamp.now();
+
+    const transactionId = await db.runTransaction(async (tx) => {
+      for (const line of hydratedLines) {
+        const balance = await this.balanceRepo.getInTransaction(
+          tx,
+          input.workspaceId,
+          input.locationId,
+          line.productId
+        );
+
+        const currentOnHand = balance?.onHand ?? 0;
+        const currentAvailable = balance?.available ?? 0;
+
+        if (
+          currentOnHand < line.quantity ||
+          currentAvailable < line.quantity
+        ) {
+          throw new HttpsError(
+            "failed-precondition",
+            `Insufficient inventory for SKU ${line.sku} at sale location.`
+          );
+        }
+      }
+
+      for (const line of hydratedLines) {
+        const balance = await this.balanceRepo.getInTransaction(
+          tx,
+          input.workspaceId,
+          input.locationId,
+          line.productId
+        );
+
+        const currentOnHand = balance?.onHand ?? 0;
+        const currentAvailable = balance?.available ?? 0;
+
+        const nextOnHand = currentOnHand - line.quantity;
+        const nextAvailable = currentAvailable - line.quantity;
+
+        if (nextOnHand < 0 || nextAvailable < 0) {
+          throw new HttpsError(
+            "failed-precondition",
+            `Inventory would go negative for SKU ${line.sku} at sale location.`
+          );
+        }
+
+        this.balanceRepo.setAbsoluteInTransaction(tx, {
+          workspaceId: input.workspaceId,
+          location,
+          product: line.product,
+          onHand: nextOnHand,
+          available: nextAvailable,
+          transactionAt: postedAt,
+        });
+      }
+
+      return this.transactionRepo.createInTransaction(
+        tx,
+        input.workspaceId,
+        {
+          type: "sale",
+          referenceType: "api",
+          sourceLocationId: input.locationId,
+          targetLocationId: null,
+          note:
+            input.note ??
+            input.orderNumber ??
+            input.saleId ??
+            "",
+          postedBy,
+          postedAt,
+          requestId,
+          relatedTransactionGroupId: null,
+        },
+        hydratedLines.map((line) => ({
+          productId: line.productId,
+          sku: line.sku,
+          quantity: line.quantity,
+          barcode: line.barcode ?? null,
+          ...(line.note ? { note: line.note } : {}),
+        }))
+      );
+    });
+
+    await this.refreshProductSummaries(
+      input.workspaceId,
+      hydratedLines.map((line) => line.productId)
+    );
+
+    await this.refreshLocationSummary(input.workspaceId, location);
+
+    await this.recentActivityRepo.create(
+      input.workspaceId,
+      buildRecentActivity({
+        workspaceId: input.workspaceId,
+        type: "sale",
+        title: `Sold ${hydratedLines.length} item${
+          hydratedLines.length === 1 ? "" : "s"
+        }`,
+        subtitle: location.name,
+        locationId: location.id,
+        actorUserId: postedBy,
+        createdAt: postedAt,
+      })
+    );
+
+    return {
+      ok: true,
+      transactionId,
+      postedAt: postedAt.toDate().toISOString(),
+      lineCount: hydratedLines.length,
+      locationId: input.locationId,
+    };
+  }
+  
   async postMove(
     input: PostMoveInventoryInput,
     postedBy: string,

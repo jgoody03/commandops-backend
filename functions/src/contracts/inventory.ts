@@ -94,3 +94,17 @@ export interface PostAdjustInventoryInput {
     note?: string;
   }>;
 }
+
+export interface PostSaleInventoryInput {
+  workspaceId: string;
+  locationId: string;
+  saleId?: string;
+  orderNumber?: string;
+  note?: string;
+  lines: Array<{
+    productId: string;
+    quantity: number;
+    barcode?: string;
+    note?: string;
+  }>;
+}
