@@ -7,12 +7,43 @@ const locationRepo_1 = require("../repositories/locationRepo");
 const productRepo_1 = require("../repositories/productRepo");
 const inventoryBalanceRepo_1 = require("../repositories/inventoryBalanceRepo");
 const inventoryTransactionRepo_1 = require("../repositories/inventoryTransactionRepo");
+const productInventorySummaryRepo_1 = require("../repositories/productInventorySummaryRepo");
+const locationInventorySummaryRepo_1 = require("../repositories/locationInventorySummaryRepo");
+const recentActivityRepo_1 = require("../repositories/recentActivityRepo");
+const buildProductInventorySummary_1 = require("../builders/buildProductInventorySummary");
+const buildLocationInventorySummary_1 = require("../builders/buildLocationInventorySummary");
+const buildRecentActivity_1 = require("../builders/buildRecentActivity");
 class TransactionPostingService {
     constructor() {
         this.locationRepo = new locationRepo_1.LocationRepo();
         this.productRepo = new productRepo_1.ProductRepo();
         this.balanceRepo = new inventoryBalanceRepo_1.InventoryBalanceRepo();
         this.transactionRepo = new inventoryTransactionRepo_1.InventoryTransactionRepo();
+        this.productSummaryRepo = new productInventorySummaryRepo_1.ProductInventorySummaryRepo();
+        this.locationSummaryRepo = new locationInventorySummaryRepo_1.LocationInventorySummaryRepo();
+        this.recentActivityRepo = new recentActivityRepo_1.RecentActivityRepo();
+    }
+    async refreshProductSummaries(workspaceId, productIds) {
+        const uniqueProductIds = [...new Set(productIds)];
+        for (const productId of uniqueProductIds) {
+            const product = await this.productRepo.getById(workspaceId, productId);
+            const balances = await this.balanceRepo.listByProduct(workspaceId, productId);
+            const summary = (0, buildProductInventorySummary_1.buildProductInventorySummary)({
+                workspaceId,
+                product,
+                balances,
+            });
+            await this.productSummaryRepo.set(workspaceId, productId, summary);
+        }
+    }
+    async refreshLocationSummary(workspaceId, location) {
+        const balances = await this.balanceRepo.listByLocation(workspaceId, location.id);
+        const summary = (0, buildLocationInventorySummary_1.buildLocationInventorySummary)({
+            workspaceId,
+            location,
+            balances,
+        });
+        await this.locationSummaryRepo.set(workspaceId, location.id, summary);
     }
     async postReceive(input, postedBy, requestId) {
         var _a, _b, _c;
@@ -46,6 +77,17 @@ class TransactionPostingService {
         for (const line of hydratedLines) {
             await this.balanceRepo.incrementOnHand(input.workspaceId, location, line.product, line.quantity, postedAt);
         }
+        await this.refreshProductSummaries(input.workspaceId, hydratedLines.map((line) => line.productId));
+        await this.refreshLocationSummary(input.workspaceId, location);
+        await this.recentActivityRepo.create(input.workspaceId, (0, buildRecentActivity_1.buildRecentActivity)({
+            workspaceId: input.workspaceId,
+            type: "receive",
+            title: `Received ${hydratedLines.length} item${hydratedLines.length === 1 ? "" : "s"}`,
+            subtitle: location.name,
+            locationId: location.id,
+            actorUserId: postedBy,
+            createdAt: postedAt,
+        }));
         return {
             ok: true,
             transactionId,
@@ -110,6 +152,17 @@ class TransactionPostingService {
                 return (Object.assign({ productId: line.productId, sku: line.sku, quantity: line.quantity, barcode: (_a = line.barcode) !== null && _a !== void 0 ? _a : null }, (line.note ? { note: line.note } : {})));
             }));
         });
+        await this.refreshProductSummaries(input.workspaceId, hydratedLines.map((line) => line.productId));
+        await this.refreshLocationSummary(input.workspaceId, location);
+        await this.recentActivityRepo.create(input.workspaceId, (0, buildRecentActivity_1.buildRecentActivity)({
+            workspaceId: input.workspaceId,
+            type: "adjust",
+            title: `Adjusted ${hydratedLines.length} item${hydratedLines.length === 1 ? "" : "s"}`,
+            subtitle: location.name,
+            locationId: location.id,
+            actorUserId: postedBy,
+            createdAt: postedAt,
+        }));
         return {
             ok: true,
             transactionId,
@@ -210,6 +263,18 @@ class TransactionPostingService {
                 moveInTransactionId,
             };
         });
+        await this.refreshProductSummaries(input.workspaceId, hydratedLines.map((line) => line.productId));
+        await this.refreshLocationSummary(input.workspaceId, sourceLocation);
+        await this.refreshLocationSummary(input.workspaceId, targetLocation);
+        await this.recentActivityRepo.create(input.workspaceId, (0, buildRecentActivity_1.buildRecentActivity)({
+            workspaceId: input.workspaceId,
+            type: "move",
+            title: `Moved ${hydratedLines.length} item${hydratedLines.length === 1 ? "" : "s"}`,
+            subtitle: `${sourceLocation.name} → ${targetLocation.name}`,
+            locationId: targetLocation.id,
+            actorUserId: postedBy,
+            createdAt: postedAt,
+        }));
         return Object.assign(Object.assign({ ok: true }, result), { postedAt: postedAt.toDate().toISOString(), lineCount: hydratedLines.length, sourceLocationId: input.sourceLocationId, targetLocationId: input.targetLocationId });
     }
 }

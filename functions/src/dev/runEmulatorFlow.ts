@@ -138,7 +138,9 @@ type ReceiveInventoryResult = {
 
 type MoveInventoryResult = {
   ok: boolean;
-  transactionId: string;
+  relatedTransactionGroupId: string;
+  moveOutTransactionId: string;
+  moveInTransactionId: string;
   postedAt: string;
   lineCount: number;
   sourceLocationId: string;
@@ -181,8 +183,74 @@ type BalanceRecord = {
   productId: string;
   onHand: number;
   available: number;
+  hasStock: boolean;
+  sku: string;
+  skuLower: string;
+  name: string;
+  nameLower: string;
+  primaryBarcode?: string | null;
+  unit?: string | null;
+  locationName: string;
+  locationCode?: string | null;
+  lowStockThreshold?: number | null;
+  reorderPoint?: number | null;
+  reorderQuantity?: number | null;
+  isOutOfStock: boolean;
+  isLowStock: boolean;
+  stockStatus: "ok" | "low" | "out";
   lastTransactionAt?: TimestampLike;
   updatedAt?: TimestampLike;
+};
+
+type ProductInventorySummaryRecord = {
+  workspaceId: string;
+  productId: string;
+  sku: string;
+  skuLower: string;
+  name: string;
+  nameLower: string;
+  primaryBarcode?: string | null;
+  unit?: string | null;
+  lowStockThreshold?: number | null;
+  reorderPoint?: number | null;
+  reorderQuantity?: number | null;
+  totalOnHand: number;
+  totalAvailable: number;
+  totalLocations: number;
+  locationsInStock: number;
+  locationsOutOfStock: number;
+  locationsLowStock: number;
+  isOutOfStockEverywhere: boolean;
+  isLowStockAnywhere: boolean;
+  stockStatus: "ok" | "low" | "out";
+  lastTransactionAt?: TimestampLike;
+  updatedAt?: TimestampLike;
+};
+
+type LocationInventorySummaryRecord = {
+  workspaceId: string;
+  locationId: string;
+  locationName: string;
+  locationCode?: string | null;
+  totalSkus: number;
+  totalUnits: number;
+  totalAvailableUnits: number;
+  lowStockSkuCount: number;
+  outOfStockSkuCount: number;
+  inStockSkuCount: number;
+  lastTransactionAt?: TimestampLike;
+  updatedAt?: TimestampLike;
+};
+
+type RecentActivityRecord = {
+  workspaceId: string;
+  type: "receive" | "move" | "adjust" | "scan" | "quick_create" | "sale";
+  productId?: string | null;
+  locationId?: string | null;
+  title: string;
+  subtitle?: string | null;
+  actorUserId?: string | null;
+  createdAt?: TimestampLike;
 };
 
 type WithId<T> = {
@@ -518,6 +586,54 @@ async function readBalance(
   };
 }
 
+async function readProductInventorySummary(
+  productId: string
+): Promise<(ProductInventorySummaryRecord & { id: string }) | null> {
+  const ref = doc(
+    db,
+    `workspaces/${WORKSPACE_ID}/productInventorySummary/${productId}`
+  );
+  const snap = await getDoc(ref);
+
+  if (!snap.exists()) {
+    return null;
+  }
+
+  return {
+    id: snap.id,
+    ...(snap.data() as ProductInventorySummaryRecord),
+  };
+}
+
+async function readLocationInventorySummary(
+  locationId: string
+): Promise<(LocationInventorySummaryRecord & { id: string }) | null> {
+  const ref = doc(
+    db,
+    `workspaces/${WORKSPACE_ID}/locationInventorySummary/${locationId}`
+  );
+  const snap = await getDoc(ref);
+
+  if (!snap.exists()) {
+    return null;
+  }
+
+  return {
+    id: snap.id,
+    ...(snap.data() as LocationInventorySummaryRecord),
+  };
+}
+
+async function readRecentActivity(): Promise<Array<RecentActivityRecord & { id: string }>> {
+  const ref = collection(db, `workspaces/${WORKSPACE_ID}/recentActivity`);
+  const snap = await getDocs(ref);
+
+  return snap.docs.map((d) => ({
+    id: d.id,
+    ...(d.data() as RecentActivityRecord),
+  }));
+}
+
 async function callFunction<TReq, TRes>(
   name: string,
   payload: TReq
@@ -589,6 +705,11 @@ async function main(): Promise<void> {
   const truck1LocationId = await ensureTruckLocation();
   console.log("Resolved TRUCK1 locationId:", truck1LocationId);
 
+    const mainLocationRecord = await findLocationByCode(MAIN_CODE);
+  const truck1LocationRecord = await findLocationByCode(TRUCK1_CODE);
+
+  assert(mainLocationRecord, "Expected MAIN location record.");
+  assert(truck1LocationRecord, "Expected TRUCK1 location record.");
   printSection("3) quickCreateProduct");
   try {
     const createProductResult = await callFunction<
@@ -794,7 +915,42 @@ async function main(): Promise<void> {
 
   expectNumberEqual(actualMainFinal, expectedMainFinal, "MAIN final balance");
   expectNumberEqual(actualTruckFinal, expectedTruckFinal, "TRUCK1 final balance");
+  printSection("12) verify enriched balance fields");
+  assert(finalMainBalance, "Expected final MAIN balance record.");
+  assert(finalTruckBalance, "Expected final TRUCK1 balance record.");
 
+  expectStringEqual(finalMainBalance?.sku, SKU, "MAIN balance sku");
+  expectStringEqual(finalMainBalance?.name, PRODUCT_NAME, "MAIN balance name");
+  expectStringEqual(
+    finalMainBalance?.locationName,
+    mainLocationRecord?.data.name,
+    "MAIN balance locationName"
+  );
+
+  expectStringEqual(
+    finalTruckBalance?.locationName,
+    truck1LocationRecord?.data.name,
+    "TRUCK1 balance locationName"
+  );
+  expectStringEqual(
+    finalMainBalance?.stockStatus,
+    "ok",
+    "MAIN balance stockStatus"
+  );
+  expectStringEqual(
+    finalTruckBalance?.stockStatus,
+    "ok",
+    "TRUCK1 balance stockStatus"
+  );
+
+  assert(
+    finalMainBalance?.isOutOfStock === false,
+    "Expected MAIN isOutOfStock=false."
+  );
+  assert(
+    finalTruckBalance?.isOutOfStock === false,
+    "Expected TRUCK1 isOutOfStock=false."
+  );
   printSection("12) getInventoryBalances - all balances");
   const allBalances = await callFunction<
     GetInventoryBalancesPayload,
@@ -1006,6 +1162,149 @@ async function main(): Promise<void> {
     PRODUCT_NAME,
     "getLocationInventory product name"
   );
+
+    printSection("18) verify product inventory summary");
+  const productSummary = await readProductInventorySummary(productId);
+
+  console.log(JSON.stringify(productSummary, null, 2));
+
+  assert(productSummary, "Expected product inventory summary.");
+  expectStringEqual(productSummary?.productId, productId, "product summary productId");
+  expectStringEqual(productSummary?.sku, SKU, "product summary sku");
+  expectStringEqual(productSummary?.name, PRODUCT_NAME, "product summary name");
+
+  expectNumberEqual(
+    productSummary?.totalOnHand ?? null,
+    expectedMainFinal + expectedTruckFinal,
+    "product summary totalOnHand"
+  );
+  expectNumberEqual(
+    productSummary?.totalAvailable ?? null,
+    expectedMainFinal + expectedTruckFinal,
+    "product summary totalAvailable"
+  );
+  expectNumberEqual(
+    productSummary?.totalLocations ?? null,
+    2,
+    "product summary totalLocations"
+  );
+  expectNumberEqual(
+    productSummary?.locationsInStock ?? null,
+    2,
+    "product summary locationsInStock"
+  );
+  expectNumberEqual(
+    productSummary?.locationsOutOfStock ?? null,
+    0,
+    "product summary locationsOutOfStock"
+  );
+  expectNumberEqual(
+    productSummary?.locationsLowStock ?? null,
+    0,
+    "product summary locationsLowStock"
+  );
+  expectStringEqual(
+    productSummary?.stockStatus,
+    "ok",
+    "product summary stockStatus"
+  );
+
+  printSection("19) verify location inventory summaries");
+  const mainLocationSummary = await readLocationInventorySummary(mainLocationId);
+  const truckLocationSummary = await readLocationInventorySummary(truck1LocationId);
+
+  console.log("MAIN location summary:");
+  console.log(JSON.stringify(mainLocationSummary, null, 2));
+  console.log("TRUCK1 location summary:");
+  console.log(JSON.stringify(truckLocationSummary, null, 2));
+
+  assert(mainLocationSummary, "Expected MAIN location summary.");
+  assert(truckLocationSummary, "Expected TRUCK1 location summary.");
+
+  expectStringEqual(
+    mainLocationSummary?.locationId,
+    mainLocationId,
+    "MAIN location summary locationId"
+  );
+  expectStringEqual(
+    truckLocationSummary?.locationId,
+    truck1LocationId,
+    "TRUCK1 location summary locationId"
+  );
+
+  expectNumberEqual(
+    mainLocationSummary?.totalSkus ?? null,
+    1,
+    "MAIN location summary totalSkus"
+  );
+  expectNumberEqual(
+    mainLocationSummary?.totalUnits ?? null,
+    expectedMainFinal,
+    "MAIN location summary totalUnits"
+  );
+  expectNumberEqual(
+    mainLocationSummary?.totalAvailableUnits ?? null,
+    expectedMainFinal,
+    "MAIN location summary totalAvailableUnits"
+  );
+  expectNumberEqual(
+    mainLocationSummary?.inStockSkuCount ?? null,
+    1,
+    "MAIN location summary inStockSkuCount"
+  );
+  expectNumberEqual(
+    mainLocationSummary?.lowStockSkuCount ?? null,
+    0,
+    "MAIN location summary lowStockSkuCount"
+  );
+  expectNumberEqual(
+    mainLocationSummary?.outOfStockSkuCount ?? null,
+    0,
+    "MAIN location summary outOfStockSkuCount"
+  );
+
+  expectNumberEqual(
+    truckLocationSummary?.totalSkus ?? null,
+    1,
+    "TRUCK1 location summary totalSkus"
+  );
+  expectNumberEqual(
+    truckLocationSummary?.totalUnits ?? null,
+    expectedTruckFinal,
+    "TRUCK1 location summary totalUnits"
+  );
+  expectNumberEqual(
+    truckLocationSummary?.totalAvailableUnits ?? null,
+    expectedTruckFinal,
+    "TRUCK1 location summary totalAvailableUnits"
+  );
+  expectNumberEqual(
+    truckLocationSummary?.inStockSkuCount ?? null,
+    1,
+    "TRUCK1 location summary inStockSkuCount"
+  );
+  expectNumberEqual(
+    truckLocationSummary?.lowStockSkuCount ?? null,
+    0,
+    "TRUCK1 location summary lowStockSkuCount"
+  );
+  expectNumberEqual(
+    truckLocationSummary?.outOfStockSkuCount ?? null,
+    0,
+    "TRUCK1 location summary outOfStockSkuCount"
+  );
+
+  printSection("20) verify recent activity");
+  const recentActivity = await readRecentActivity();
+
+  console.log(JSON.stringify(recentActivity, null, 2));
+
+  assert(recentActivity.length >= 3, "Expected at least 3 recent activity records.");
+
+  const activityTypes = recentActivity.map((item) => item.type);
+  assert(activityTypes.includes("receive"), "Expected receive activity.");
+  assert(activityTypes.includes("move"), "Expected move activity.");
+  assert(activityTypes.includes("adjust"), "Expected adjust activity.");
   printSection("Flow complete");
   console.log("All emulator flow checks passed.");
 }

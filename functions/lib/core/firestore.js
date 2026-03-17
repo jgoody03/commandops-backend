@@ -12,6 +12,9 @@ exports.barcodeIndexCol = barcodeIndexCol;
 exports.balancesCol = balancesCol;
 exports.transactionsCol = transactionsCol;
 exports.scanEventsCol = scanEventsCol;
+exports.productInventorySummaryCol = productInventorySummaryCol;
+exports.locationInventorySummaryCol = locationInventorySummaryCol;
+exports.recentActivityCol = recentActivityCol;
 const firebase_admin_1 = __importDefault(require("firebase-admin"));
 if (!firebase_admin_1.default.apps.length) {
     firebase_admin_1.default.initializeApp();
@@ -42,5 +45,14 @@ function transactionsCol(workspaceId) {
 }
 function scanEventsCol(workspaceId) {
     return workspaceRef(workspaceId).collection("scanEvents");
+}
+function productInventorySummaryCol(workspaceId) {
+    return workspaceRef(workspaceId).collection("productInventorySummary");
+}
+function locationInventorySummaryCol(workspaceId) {
+    return workspaceRef(workspaceId).collection("locationInventorySummary");
+}
+function recentActivityCol(workspaceId) {
+    return workspaceRef(workspaceId).collection("recentActivity");
 }
 //# sourceMappingURL=firestore.js.map

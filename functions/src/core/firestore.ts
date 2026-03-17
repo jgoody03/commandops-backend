@@ -39,3 +39,15 @@ export function transactionsCol(workspaceId: string) {
 export function scanEventsCol(workspaceId: string) {
   return workspaceRef(workspaceId).collection("scanEvents");
 }
+
+export function productInventorySummaryCol(workspaceId: string) {
+  return workspaceRef(workspaceId).collection("productInventorySummary");
+}
+
+export function locationInventorySummaryCol(workspaceId: string) {
+  return workspaceRef(workspaceId).collection("locationInventorySummary");
+}
+
+export function recentActivityCol(workspaceId: string) {
+  return workspaceRef(workspaceId).collection("recentActivity");
+}

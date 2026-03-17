@@ -9,6 +9,12 @@ import { LocationRepo } from "../repositories/locationRepo";
 import { ProductRepo } from "../repositories/productRepo";
 import { InventoryBalanceRepo } from "../repositories/inventoryBalanceRepo";
 import { InventoryTransactionRepo } from "../repositories/inventoryTransactionRepo";
+import { ProductInventorySummaryRepo } from "../repositories/productInventorySummaryRepo";
+import { LocationInventorySummaryRepo } from "../repositories/locationInventorySummaryRepo";
+import { RecentActivityRepo } from "../repositories/recentActivityRepo";
+import { buildProductInventorySummary } from "../builders/buildProductInventorySummary";
+import { buildLocationInventorySummary } from "../builders/buildLocationInventorySummary";
+import { buildRecentActivity } from "../builders/buildRecentActivity";
 
 type HydratedReceiveLine = {
   productId: string;
@@ -43,6 +49,44 @@ export class TransactionPostingService {
   private productRepo = new ProductRepo();
   private balanceRepo = new InventoryBalanceRepo();
   private transactionRepo = new InventoryTransactionRepo();
+  private productSummaryRepo = new ProductInventorySummaryRepo();
+  private locationSummaryRepo = new LocationInventorySummaryRepo();
+  private recentActivityRepo = new RecentActivityRepo();
+
+  private async refreshProductSummaries(
+    workspaceId: string,
+    productIds: string[]
+  ) {
+    const uniqueProductIds = [...new Set(productIds)];
+
+    for (const productId of uniqueProductIds) {
+      const product = await this.productRepo.getById(workspaceId, productId);
+      const balances = await this.balanceRepo.listByProduct(workspaceId, productId);
+
+      const summary = buildProductInventorySummary({
+        workspaceId,
+        product,
+        balances,
+      });
+
+      await this.productSummaryRepo.set(workspaceId, productId, summary);
+    }
+  }
+
+  private async refreshLocationSummary(
+    workspaceId: string,
+    location: Awaited<ReturnType<LocationRepo["getById"]>>
+  ) {
+    const balances = await this.balanceRepo.listByLocation(workspaceId, location.id);
+
+    const summary = buildLocationInventorySummary({
+      workspaceId,
+      location,
+      balances,
+    });
+
+    await this.locationSummaryRepo.set(workspaceId, location.id, summary);
+  }
 
   async postReceive(
     input: PostReceiveInventoryInput,
@@ -118,6 +162,28 @@ export class TransactionPostingService {
         postedAt
       );
     }
+
+    await this.refreshProductSummaries(
+      input.workspaceId,
+      hydratedLines.map((line) => line.productId)
+    );
+
+    await this.refreshLocationSummary(input.workspaceId, location);
+
+    await this.recentActivityRepo.create(
+      input.workspaceId,
+      buildRecentActivity({
+        workspaceId: input.workspaceId,
+        type: "receive",
+        title: `Received ${hydratedLines.length} item${
+          hydratedLines.length === 1 ? "" : "s"
+        }`,
+        subtitle: location.name,
+        locationId: location.id,
+        actorUserId: postedBy,
+        createdAt: postedAt,
+      })
+    );
 
     return {
       ok: true,
@@ -238,6 +304,28 @@ export class TransactionPostingService {
         }))
       );
     });
+
+    await this.refreshProductSummaries(
+      input.workspaceId,
+      hydratedLines.map((line) => line.productId)
+    );
+
+    await this.refreshLocationSummary(input.workspaceId, location);
+
+    await this.recentActivityRepo.create(
+      input.workspaceId,
+      buildRecentActivity({
+        workspaceId: input.workspaceId,
+        type: "adjust",
+        title: `Adjusted ${hydratedLines.length} item${
+          hydratedLines.length === 1 ? "" : "s"
+        }`,
+        subtitle: location.name,
+        locationId: location.id,
+        actorUserId: postedBy,
+        createdAt: postedAt,
+      })
+    );
 
     return {
       ok: true,
@@ -372,9 +460,10 @@ export class TransactionPostingService {
           transactionAt: postedAt,
         });
       }
+
       const relatedTransactionGroupId =
         this.transactionRepo.newId(input.workspaceId);
-        
+
       const moveOutTransactionId = this.transactionRepo.createInTransaction(
         tx,
         input.workspaceId,
@@ -427,6 +516,29 @@ export class TransactionPostingService {
         moveInTransactionId,
       };
     });
+
+    await this.refreshProductSummaries(
+      input.workspaceId,
+      hydratedLines.map((line) => line.productId)
+    );
+
+    await this.refreshLocationSummary(input.workspaceId, sourceLocation);
+    await this.refreshLocationSummary(input.workspaceId, targetLocation);
+
+    await this.recentActivityRepo.create(
+      input.workspaceId,
+      buildRecentActivity({
+        workspaceId: input.workspaceId,
+        type: "move",
+        title: `Moved ${hydratedLines.length} item${
+          hydratedLines.length === 1 ? "" : "s"
+        }`,
+        subtitle: `${sourceLocation.name} → ${targetLocation.name}`,
+        locationId: targetLocation.id,
+        actorUserId: postedBy,
+        createdAt: postedAt,
+      })
+    );
 
     return {
       ok: true,
