@@ -9,3 +9,7 @@ export { getInventoryBalances } from "./functions/getInventoryBalances";
 export { getProductByBarcode } from "./functions/getProductByBarcode";
 export { searchProducts } from "./functions/searchProducts";
 export { getLocationInventory } from "./functions/getLocationInventory";
+export { getProductSummaryList } from "./functions/getProductSummaryList";
+export { getLocationSummaryList } from "./functions/getLocationSummaryList";
+export { getRecentActivityFeed } from "./functions/getRecentActivityFeed";
+export { getTodaySnapshot } from "./functions/getTodaySnapshot";

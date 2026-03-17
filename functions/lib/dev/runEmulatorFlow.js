@@ -62,6 +62,21 @@ function expectStringEqual(actual, expected, label) {
         throw new Error(`${label} mismatch. Expected ${expected}, got ${actual}`);
     }
 }
+function expectDescendingCreatedAt(items, label) {
+    var _a, _b;
+    for (let i = 1; i < items.length; i += 1) {
+        const prev = items[i - 1];
+        const curr = items[i];
+        const prevMs = (_a = prev.createdAtMs) !== null && _a !== void 0 ? _a : 0;
+        const currMs = (_b = curr.createdAtMs) !== null && _b !== void 0 ? _b : 0;
+        if (prevMs < currMs) {
+            throw new Error(`${label} sort order invalid at index ${i}. ${prev.id} (${prevMs}) came before ${curr.id} (${currMs}).`);
+        }
+        if (prevMs === currMs && prev.id < curr.id) {
+            throw new Error(`${label} tiebreak order invalid at index ${i}. Expected documentId desc for equal timestamps.`);
+        }
+    }
+}
 function expectArrayLength(arr, expected, label) {
     if (arr.length !== expected) {
         throw new Error(`${label} mismatch. Expected ${expected}, got ${arr.length}`);
@@ -159,13 +174,34 @@ async function readBalance(locationId, productId) {
     const data = balanceSnap.data();
     return Object.assign({ id: balanceSnap.id }, data);
 }
+async function readProductInventorySummary(productId) {
+    const ref = (0, firestore_1.doc)(db, `workspaces/${WORKSPACE_ID}/productInventorySummary/${productId}`);
+    const snap = await (0, firestore_1.getDoc)(ref);
+    if (!snap.exists()) {
+        return null;
+    }
+    return Object.assign({ id: snap.id }, snap.data());
+}
+async function readLocationInventorySummary(locationId) {
+    const ref = (0, firestore_1.doc)(db, `workspaces/${WORKSPACE_ID}/locationInventorySummary/${locationId}`);
+    const snap = await (0, firestore_1.getDoc)(ref);
+    if (!snap.exists()) {
+        return null;
+    }
+    return Object.assign({ id: snap.id }, snap.data());
+}
+async function readRecentActivity() {
+    const ref = (0, firestore_1.collection)(db, `workspaces/${WORKSPACE_ID}/recentActivity`);
+    const snap = await (0, firestore_1.getDocs)(ref);
+    return snap.docs.map((d) => (Object.assign({ id: d.id }, d.data())));
+}
 async function callFunction(name, payload) {
     const callable = (0, functions_1.httpsCallable)(functions, name);
     const result = await callable(payload);
     return result.data;
 }
 async function main() {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q, _r, _s, _t, _u, _v, _w;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17;
     printSection("Starting CommandOps emulator flow");
     console.log("RUN_ID:", RUN_ID);
     console.log("WORKSPACE_ID:", WORKSPACE_ID);
@@ -205,6 +241,10 @@ async function main() {
     console.log("Resolved MAIN locationId:", mainLocationId);
     const truck1LocationId = await ensureTruckLocation();
     console.log("Resolved TRUCK1 locationId:", truck1LocationId);
+    const mainLocationRecord = await findLocationByCode(MAIN_CODE);
+    const truck1LocationRecord = await findLocationByCode(TRUCK1_CODE);
+    assert(mainLocationRecord, "Expected MAIN location record.");
+    assert(truck1LocationRecord, "Expected TRUCK1 location record.");
     printSection("3) quickCreateProduct");
     try {
         const createProductResult = await callFunction("quickCreateProduct", {
@@ -332,6 +372,17 @@ async function main() {
     console.log("Actual   TRUCK1 onHand final:", actualTruckFinal);
     expectNumberEqual(actualMainFinal, expectedMainFinal, "MAIN final balance");
     expectNumberEqual(actualTruckFinal, expectedTruckFinal, "TRUCK1 final balance");
+    printSection("12) verify enriched balance fields");
+    assert(finalMainBalance, "Expected final MAIN balance record.");
+    assert(finalTruckBalance, "Expected final TRUCK1 balance record.");
+    expectStringEqual(finalMainBalance === null || finalMainBalance === void 0 ? void 0 : finalMainBalance.sku, SKU, "MAIN balance sku");
+    expectStringEqual(finalMainBalance === null || finalMainBalance === void 0 ? void 0 : finalMainBalance.name, PRODUCT_NAME, "MAIN balance name");
+    expectStringEqual(finalMainBalance === null || finalMainBalance === void 0 ? void 0 : finalMainBalance.locationName, mainLocationRecord.data.name, "MAIN balance locationName");
+    expectStringEqual(finalTruckBalance === null || finalTruckBalance === void 0 ? void 0 : finalTruckBalance.locationName, truck1LocationRecord.data.name, "TRUCK1 balance locationName");
+    expectStringEqual(finalMainBalance === null || finalMainBalance === void 0 ? void 0 : finalMainBalance.stockStatus, "ok", "MAIN balance stockStatus");
+    expectStringEqual(finalTruckBalance === null || finalTruckBalance === void 0 ? void 0 : finalTruckBalance.stockStatus, "ok", "TRUCK1 balance stockStatus");
+    assert((finalMainBalance === null || finalMainBalance === void 0 ? void 0 : finalMainBalance.isOutOfStock) === false, "Expected MAIN isOutOfStock=false.");
+    assert((finalTruckBalance === null || finalTruckBalance === void 0 ? void 0 : finalTruckBalance.isOutOfStock) === false, "Expected TRUCK1 isOutOfStock=false.");
     printSection("12) getInventoryBalances - all balances");
     const allBalances = await callFunction("getInventoryBalances", {
         workspaceId: WORKSPACE_ID,
@@ -424,6 +475,101 @@ async function main() {
     expectNumberEqual((_u = truckInventoryItem === null || truckInventoryItem === void 0 ? void 0 : truckInventoryItem.onHand) !== null && _u !== void 0 ? _u : null, expectedTruckFinal, "getLocationInventory onHand");
     expectStringEqual((_v = truckInventoryItem === null || truckInventoryItem === void 0 ? void 0 : truckInventoryItem.product) === null || _v === void 0 ? void 0 : _v.sku, SKU, "getLocationInventory product sku");
     expectStringEqual((_w = truckInventoryItem === null || truckInventoryItem === void 0 ? void 0 : truckInventoryItem.product) === null || _w === void 0 ? void 0 : _w.name, PRODUCT_NAME, "getLocationInventory product name");
+    printSection("18) verify product inventory summary");
+    const productSummary = await readProductInventorySummary(productId);
+    console.log(JSON.stringify(productSummary, null, 2));
+    assert(productSummary, "Expected product inventory summary.");
+    expectStringEqual(productSummary === null || productSummary === void 0 ? void 0 : productSummary.productId, productId, "product summary productId");
+    expectStringEqual(productSummary === null || productSummary === void 0 ? void 0 : productSummary.sku, SKU, "product summary sku");
+    expectStringEqual(productSummary === null || productSummary === void 0 ? void 0 : productSummary.name, PRODUCT_NAME, "product summary name");
+    expectNumberEqual((_x = productSummary === null || productSummary === void 0 ? void 0 : productSummary.totalOnHand) !== null && _x !== void 0 ? _x : null, expectedMainFinal + expectedTruckFinal, "product summary totalOnHand");
+    expectNumberEqual((_y = productSummary === null || productSummary === void 0 ? void 0 : productSummary.totalAvailable) !== null && _y !== void 0 ? _y : null, expectedMainFinal + expectedTruckFinal, "product summary totalAvailable");
+    expectNumberEqual((_z = productSummary === null || productSummary === void 0 ? void 0 : productSummary.totalLocations) !== null && _z !== void 0 ? _z : null, 2, "product summary totalLocations");
+    expectNumberEqual((_0 = productSummary === null || productSummary === void 0 ? void 0 : productSummary.locationsInStock) !== null && _0 !== void 0 ? _0 : null, 2, "product summary locationsInStock");
+    expectNumberEqual((_1 = productSummary === null || productSummary === void 0 ? void 0 : productSummary.locationsOutOfStock) !== null && _1 !== void 0 ? _1 : null, 0, "product summary locationsOutOfStock");
+    expectNumberEqual((_2 = productSummary === null || productSummary === void 0 ? void 0 : productSummary.locationsLowStock) !== null && _2 !== void 0 ? _2 : null, 0, "product summary locationsLowStock");
+    expectStringEqual(productSummary === null || productSummary === void 0 ? void 0 : productSummary.stockStatus, "ok", "product summary stockStatus");
+    printSection("19) verify location inventory summaries");
+    const mainLocationSummary = await readLocationInventorySummary(mainLocationId);
+    const truckLocationSummary = await readLocationInventorySummary(truck1LocationId);
+    console.log("MAIN location summary:");
+    console.log(JSON.stringify(mainLocationSummary, null, 2));
+    console.log("TRUCK1 location summary:");
+    console.log(JSON.stringify(truckLocationSummary, null, 2));
+    assert(mainLocationSummary, "Expected MAIN location summary.");
+    assert(truckLocationSummary, "Expected TRUCK1 location summary.");
+    expectStringEqual(mainLocationSummary === null || mainLocationSummary === void 0 ? void 0 : mainLocationSummary.locationId, mainLocationId, "MAIN location summary locationId");
+    expectStringEqual(truckLocationSummary === null || truckLocationSummary === void 0 ? void 0 : truckLocationSummary.locationId, truck1LocationId, "TRUCK1 location summary locationId");
+    expectNumberEqual((_3 = mainLocationSummary === null || mainLocationSummary === void 0 ? void 0 : mainLocationSummary.totalSkus) !== null && _3 !== void 0 ? _3 : null, 1, "MAIN location summary totalSkus");
+    expectNumberEqual((_4 = mainLocationSummary === null || mainLocationSummary === void 0 ? void 0 : mainLocationSummary.totalUnits) !== null && _4 !== void 0 ? _4 : null, expectedMainFinal, "MAIN location summary totalUnits");
+    expectNumberEqual((_5 = mainLocationSummary === null || mainLocationSummary === void 0 ? void 0 : mainLocationSummary.totalAvailableUnits) !== null && _5 !== void 0 ? _5 : null, expectedMainFinal, "MAIN location summary totalAvailableUnits");
+    expectNumberEqual((_6 = mainLocationSummary === null || mainLocationSummary === void 0 ? void 0 : mainLocationSummary.inStockSkuCount) !== null && _6 !== void 0 ? _6 : null, 1, "MAIN location summary inStockSkuCount");
+    expectNumberEqual((_7 = mainLocationSummary === null || mainLocationSummary === void 0 ? void 0 : mainLocationSummary.lowStockSkuCount) !== null && _7 !== void 0 ? _7 : null, 0, "MAIN location summary lowStockSkuCount");
+    expectNumberEqual((_8 = mainLocationSummary === null || mainLocationSummary === void 0 ? void 0 : mainLocationSummary.outOfStockSkuCount) !== null && _8 !== void 0 ? _8 : null, 0, "MAIN location summary outOfStockSkuCount");
+    expectNumberEqual((_9 = truckLocationSummary === null || truckLocationSummary === void 0 ? void 0 : truckLocationSummary.totalSkus) !== null && _9 !== void 0 ? _9 : null, 1, "TRUCK1 location summary totalSkus");
+    expectNumberEqual((_10 = truckLocationSummary === null || truckLocationSummary === void 0 ? void 0 : truckLocationSummary.totalUnits) !== null && _10 !== void 0 ? _10 : null, expectedTruckFinal, "TRUCK1 location summary totalUnits");
+    expectNumberEqual((_11 = truckLocationSummary === null || truckLocationSummary === void 0 ? void 0 : truckLocationSummary.totalAvailableUnits) !== null && _11 !== void 0 ? _11 : null, expectedTruckFinal, "TRUCK1 location summary totalAvailableUnits");
+    expectNumberEqual((_12 = truckLocationSummary === null || truckLocationSummary === void 0 ? void 0 : truckLocationSummary.inStockSkuCount) !== null && _12 !== void 0 ? _12 : null, 1, "TRUCK1 location summary inStockSkuCount");
+    expectNumberEqual((_13 = truckLocationSummary === null || truckLocationSummary === void 0 ? void 0 : truckLocationSummary.lowStockSkuCount) !== null && _13 !== void 0 ? _13 : null, 0, "TRUCK1 location summary lowStockSkuCount");
+    expectNumberEqual((_14 = truckLocationSummary === null || truckLocationSummary === void 0 ? void 0 : truckLocationSummary.outOfStockSkuCount) !== null && _14 !== void 0 ? _14 : null, 0, "TRUCK1 location summary outOfStockSkuCount");
+    printSection("20) verify recent activity");
+    const recentActivity = await readRecentActivity();
+    console.log(JSON.stringify(recentActivity, null, 2));
+    assert(recentActivity.length >= 3, "Expected at least 3 recent activity records.");
+    const activityTypes = recentActivity.map((item) => item.type);
+    assert(activityTypes.includes("receive"), "Expected receive activity.");
+    assert(activityTypes.includes("move"), "Expected move activity.");
+    assert(activityTypes.includes("adjust"), "Expected adjust activity.");
+    printSection("21) getProductSummaryList");
+    const productSummaryList = await callFunction("getProductSummaryList", {
+        workspaceId: WORKSPACE_ID,
+        limit: 10,
+    });
+    console.log(JSON.stringify(productSummaryList, null, 2));
+    assert(productSummaryList.items.length >= 1, "Expected at least one product summary item.");
+    const summaryItem = productSummaryList.items.find((item) => item.productId === productId);
+    assert(summaryItem, "Expected created product in product summary list.");
+    expectStringEqual(summaryItem === null || summaryItem === void 0 ? void 0 : summaryItem.sku, SKU, "product summary list sku");
+    expectStringEqual(summaryItem === null || summaryItem === void 0 ? void 0 : summaryItem.name, PRODUCT_NAME, "product summary list name");
+    expectNumberEqual((_15 = summaryItem === null || summaryItem === void 0 ? void 0 : summaryItem.totalOnHand) !== null && _15 !== void 0 ? _15 : null, expectedMainFinal + expectedTruckFinal, "product summary list totalOnHand");
+    expectStringEqual(summaryItem === null || summaryItem === void 0 ? void 0 : summaryItem.stockStatus, "ok", "product summary list stockStatus");
+    printSection("22) getLocationSummaryList");
+    const locationSummaryList = await callFunction("getLocationSummaryList", {
+        workspaceId: WORKSPACE_ID,
+        limit: 10,
+    });
+    console.log(JSON.stringify(locationSummaryList, null, 2));
+    expectArrayLength(locationSummaryList.items, 2, "location summary list item count");
+    const mainSummaryItem = locationSummaryList.items.find((item) => item.locationId === mainLocationId);
+    const truckSummaryItem = locationSummaryList.items.find((item) => item.locationId === truck1LocationId);
+    assert(mainSummaryItem, "Expected MAIN in location summary list.");
+    assert(truckSummaryItem, "Expected TRUCK1 in location summary list.");
+    expectNumberEqual((_16 = mainSummaryItem === null || mainSummaryItem === void 0 ? void 0 : mainSummaryItem.totalUnits) !== null && _16 !== void 0 ? _16 : null, expectedMainFinal, "location summary MAIN totalUnits");
+    expectNumberEqual((_17 = truckSummaryItem === null || truckSummaryItem === void 0 ? void 0 : truckSummaryItem.totalUnits) !== null && _17 !== void 0 ? _17 : null, expectedTruckFinal, "location summary TRUCK1 totalUnits");
+    printSection("23) getRecentActivityFeed");
+    const recentActivityFeed = await callFunction("getRecentActivityFeed", {
+        workspaceId: WORKSPACE_ID,
+        limit: 10,
+    });
+    console.log(JSON.stringify(recentActivityFeed, null, 2));
+    assert(recentActivityFeed.items.length >= 3, "Expected at least 3 recent activity feed items.");
+    expectDescendingCreatedAt(recentActivityFeed.items, "recent activity feed");
+    const feedTypes = recentActivityFeed.items.map((item) => item.type);
+    assert(feedTypes.includes("receive"), "Expected receive in activity feed.");
+    assert(feedTypes.includes("move"), "Expected move in activity feed.");
+    assert(feedTypes.includes("adjust"), "Expected adjust in activity feed.");
+    printSection("24) getTodaySnapshot");
+    const todaySnapshot = await callFunction("getTodaySnapshot", {
+        workspaceId: WORKSPACE_ID,
+    });
+    console.log(JSON.stringify(todaySnapshot, null, 2));
+    expectNumberEqual(todaySnapshot.totals.totalProducts, 1, "today snapshot totalProducts");
+    expectNumberEqual(todaySnapshot.totals.totalLocations, 2, "today snapshot totalLocations");
+    expectNumberEqual(todaySnapshot.totals.totalUnits, expectedMainFinal + expectedTruckFinal, "today snapshot totalUnits");
+    expectNumberEqual(todaySnapshot.activity.receiveCount, 1, "today snapshot receiveCount");
+    expectNumberEqual(todaySnapshot.activity.moveCount, 1, "today snapshot moveCount");
+    expectNumberEqual(todaySnapshot.activity.adjustCount, 1, "today snapshot adjustCount");
+    assert(todaySnapshot.recentActivity.length >= 3, "Expected recent activity preview in today snapshot.");
     printSection("Flow complete");
     console.log("All emulator flow checks passed.");
 }

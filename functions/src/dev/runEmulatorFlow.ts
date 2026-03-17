@@ -367,6 +367,129 @@ type GetLocationInventoryPayload = {
   cursor?: GetLocationInventoryCursor | null;
 };
 
+type SummaryListCursor = {
+  updatedAtMs: number;
+  docId: string;
+};
+
+type ActivityFeedCursor = {
+  createdAtMs: number;
+  docId: string;
+};
+
+type ProductSummaryListItem = {
+  id: string;
+  workspaceId: string;
+  productId: string;
+  sku: string;
+  name: string;
+  primaryBarcode?: string | null;
+  unit?: string | null;
+  totalOnHand: number;
+  totalAvailable: number;
+  totalLocations: number;
+  locationsInStock: number;
+  locationsOutOfStock: number;
+  locationsLowStock: number;
+  isOutOfStockEverywhere: boolean;
+  isLowStockAnywhere: boolean;
+  stockStatus: "ok" | "low" | "out";
+  lastTransactionAtMs: number | null;
+  updatedAtMs: number | null;
+};
+
+type GetProductSummaryListPayload = {
+  workspaceId: string;
+  limit?: number;
+  cursor?: SummaryListCursor | null;
+  query?: string;
+  stockStatus?: "ok" | "low" | "out";
+};
+
+type GetProductSummaryListResult = {
+  items: ProductSummaryListItem[];
+  nextCursor: SummaryListCursor | null;
+};
+
+type LocationSummaryListItem = {
+  id: string;
+  workspaceId: string;
+  locationId: string;
+  locationName: string;
+  locationCode?: string | null;
+  totalSkus: number;
+  totalUnits: number;
+  totalAvailableUnits: number;
+  lowStockSkuCount: number;
+  outOfStockSkuCount: number;
+  inStockSkuCount: number;
+  lastTransactionAtMs: number | null;
+  updatedAtMs: number | null;
+};
+
+type GetLocationSummaryListPayload = {
+  workspaceId: string;
+  limit?: number;
+  cursor?: SummaryListCursor | null;
+  query?: string;
+};
+
+type GetLocationSummaryListResult = {
+  items: LocationSummaryListItem[];
+  nextCursor: SummaryListCursor | null;
+};
+
+type RecentActivityFeedItem = {
+  id: string;
+  workspaceId: string;
+  type: "receive" | "move" | "adjust" | "scan" | "quick_create" | "sale";
+  productId?: string | null;
+  locationId?: string | null;
+  title: string;
+  subtitle?: string | null;
+  actorUserId?: string | null;
+  createdAtMs: number | null;
+};
+
+type GetRecentActivityFeedPayload = {
+  workspaceId: string;
+  limit?: number;
+  cursor?: ActivityFeedCursor | null;
+  type?: "receive" | "move" | "adjust" | "scan" | "quick_create" | "sale";
+  locationId?: string;
+  productId?: string;
+};
+
+type GetRecentActivityFeedResult = {
+  items: RecentActivityFeedItem[];
+  nextCursor: ActivityFeedCursor | null;
+};
+
+type GetTodaySnapshotPayload = {
+  workspaceId: string;
+};
+
+type GetTodaySnapshotResult = {
+  totals: {
+    totalProducts: number;
+    totalLocations: number;
+    totalUnits: number;
+    lowStockProducts: number;
+    outOfStockProducts: number;
+  };
+  activity: {
+    receiveCount: number;
+    moveCount: number;
+    adjustCount: number;
+    scanCount: number;
+    quickCreateCount: number;
+    saleCount: number;
+    totalCount: number;
+  };
+  recentActivity: RecentActivityFeedItem[];
+  generatedAtMs: number;
+};
+
 type GetLocationInventoryResult = {
   items: Array<{
     id: string;
@@ -431,6 +554,31 @@ function expectStringEqual(
 ): void {
   if (actual !== expected) {
     throw new Error(`${label} mismatch. Expected ${expected}, got ${actual}`);
+  }
+}
+
+function expectDescendingCreatedAt(
+  items: RecentActivityFeedItem[],
+  label: string
+): void {
+  for (let i = 1; i < items.length; i += 1) {
+    const prev = items[i - 1];
+    const curr = items[i];
+
+    const prevMs = prev.createdAtMs ?? 0;
+    const currMs = curr.createdAtMs ?? 0;
+
+    if (prevMs < currMs) {
+      throw new Error(
+        `${label} sort order invalid at index ${i}. ${prev.id} (${prevMs}) came before ${curr.id} (${currMs}).`
+      );
+    }
+
+    if (prevMs === currMs && prev.id < curr.id) {
+      throw new Error(
+        `${label} tiebreak order invalid at index ${i}. Expected documentId desc for equal timestamps.`
+      );
+    }
   }
 }
 
@@ -921,17 +1069,18 @@ async function main(): Promise<void> {
 
   expectStringEqual(finalMainBalance?.sku, SKU, "MAIN balance sku");
   expectStringEqual(finalMainBalance?.name, PRODUCT_NAME, "MAIN balance name");
-  expectStringEqual(
+expectStringEqual(
     finalMainBalance?.locationName,
-    mainLocationRecord?.data.name,
+    mainLocationRecord!.data.name,
     "MAIN balance locationName"
   );
 
   expectStringEqual(
     finalTruckBalance?.locationName,
-    truck1LocationRecord?.data.name,
+    truck1LocationRecord!.data.name,
     "TRUCK1 balance locationName"
   );
+  
   expectStringEqual(
     finalMainBalance?.stockStatus,
     "ok",
@@ -1305,6 +1454,145 @@ async function main(): Promise<void> {
   assert(activityTypes.includes("receive"), "Expected receive activity.");
   assert(activityTypes.includes("move"), "Expected move activity.");
   assert(activityTypes.includes("adjust"), "Expected adjust activity.");
+
+    printSection("21) getProductSummaryList");
+  const productSummaryList = await callFunction<
+    GetProductSummaryListPayload,
+    GetProductSummaryListResult
+  >("getProductSummaryList", {
+    workspaceId: WORKSPACE_ID,
+    limit: 10,
+  });
+
+  console.log(JSON.stringify(productSummaryList, null, 2));
+
+  assert(
+    productSummaryList.items.length >= 1,
+    "Expected at least one product summary item."
+  );
+
+  const summaryItem = productSummaryList.items.find(
+    (item) => item.productId === productId
+  );
+
+  assert(summaryItem, "Expected created product in product summary list.");
+  expectStringEqual(summaryItem?.sku, SKU, "product summary list sku");
+  expectStringEqual(summaryItem?.name, PRODUCT_NAME, "product summary list name");
+  expectNumberEqual(
+    summaryItem?.totalOnHand ?? null,
+    expectedMainFinal + expectedTruckFinal,
+    "product summary list totalOnHand"
+  );
+  expectStringEqual(
+    summaryItem?.stockStatus,
+    "ok",
+    "product summary list stockStatus"
+  );
+
+  printSection("22) getLocationSummaryList");
+  const locationSummaryList = await callFunction<
+    GetLocationSummaryListPayload,
+    GetLocationSummaryListResult
+  >("getLocationSummaryList", {
+    workspaceId: WORKSPACE_ID,
+    limit: 10,
+  });
+
+  console.log(JSON.stringify(locationSummaryList, null, 2));
+
+  expectArrayLength(
+    locationSummaryList.items,
+    2,
+    "location summary list item count"
+  );
+
+  const mainSummaryItem = locationSummaryList.items.find(
+    (item) => item.locationId === mainLocationId
+  );
+  const truckSummaryItem = locationSummaryList.items.find(
+    (item) => item.locationId === truck1LocationId
+  );
+
+  assert(mainSummaryItem, "Expected MAIN in location summary list.");
+  assert(truckSummaryItem, "Expected TRUCK1 in location summary list.");
+
+  expectNumberEqual(
+    mainSummaryItem?.totalUnits ?? null,
+    expectedMainFinal,
+    "location summary MAIN totalUnits"
+  );
+  expectNumberEqual(
+    truckSummaryItem?.totalUnits ?? null,
+    expectedTruckFinal,
+    "location summary TRUCK1 totalUnits"
+  );
+
+  printSection("23) getRecentActivityFeed");
+  const recentActivityFeed = await callFunction<
+    GetRecentActivityFeedPayload,
+    GetRecentActivityFeedResult
+  >("getRecentActivityFeed", {
+    workspaceId: WORKSPACE_ID,
+    limit: 10,
+  });
+
+  console.log(JSON.stringify(recentActivityFeed, null, 2));
+
+  assert(
+    recentActivityFeed.items.length >= 3,
+    "Expected at least 3 recent activity feed items."
+  );
+  expectDescendingCreatedAt(recentActivityFeed.items, "recent activity feed");
+
+  const feedTypes = recentActivityFeed.items.map((item) => item.type);
+  assert(feedTypes.includes("receive"), "Expected receive in activity feed.");
+  assert(feedTypes.includes("move"), "Expected move in activity feed.");
+  assert(feedTypes.includes("adjust"), "Expected adjust in activity feed.");
+
+  printSection("24) getTodaySnapshot");
+  const todaySnapshot = await callFunction<
+    GetTodaySnapshotPayload,
+    GetTodaySnapshotResult
+  >("getTodaySnapshot", {
+    workspaceId: WORKSPACE_ID,
+  });
+
+  console.log(JSON.stringify(todaySnapshot, null, 2));
+
+  expectNumberEqual(
+    todaySnapshot.totals.totalProducts,
+    1,
+    "today snapshot totalProducts"
+  );
+  expectNumberEqual(
+    todaySnapshot.totals.totalLocations,
+    2,
+    "today snapshot totalLocations"
+  );
+  expectNumberEqual(
+    todaySnapshot.totals.totalUnits,
+    expectedMainFinal + expectedTruckFinal,
+    "today snapshot totalUnits"
+  );
+  expectNumberEqual(
+    todaySnapshot.activity.receiveCount,
+    1,
+    "today snapshot receiveCount"
+  );
+  expectNumberEqual(
+    todaySnapshot.activity.moveCount,
+    1,
+    "today snapshot moveCount"
+  );
+  expectNumberEqual(
+    todaySnapshot.activity.adjustCount,
+    1,
+    "today snapshot adjustCount"
+  );
+  assert(
+    todaySnapshot.recentActivity.length >= 3,
+    "Expected recent activity preview in today snapshot."
+  );
   printSection("Flow complete");
   console.log("All emulator flow checks passed.");
 }
