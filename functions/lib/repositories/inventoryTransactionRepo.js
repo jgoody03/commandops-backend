@@ -3,6 +3,9 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.InventoryTransactionRepo = void 0;
 const firestore_1 = require("../core/firestore");
 class InventoryTransactionRepo {
+    newId(workspaceId) {
+        return (0, firestore_1.transactionsCol)(workspaceId).doc().id;
+    }
     async create(workspaceId, header, lines) {
         const ref = (0, firestore_1.transactionsCol)(workspaceId).doc();
         const now = firestore_1.Timestamp.now();

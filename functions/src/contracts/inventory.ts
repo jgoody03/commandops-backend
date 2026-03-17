@@ -1,14 +1,37 @@
 import { Timestamp } from "firebase-admin/firestore";
 import { InventoryTransactionType, ReferenceType } from "./enums";
 
+export type StockStatus = "ok" | "low" | "out";
+
 export interface InventoryBalanceDoc {
   workspaceId: string;
   locationId: string;
   productId: string;
+
   onHand: number;
   available: number;
+
   hasStock: boolean;
-  lastTransactionAt?: Timestamp;
+
+  sku: string;
+  skuLower: string;
+  name: string;
+  nameLower: string;
+  primaryBarcode?: string | null;
+  unit?: string | null;
+
+  locationName: string;
+  locationCode?: string | null;
+
+  lowStockThreshold?: number | null;
+  reorderPoint?: number | null;
+  reorderQuantity?: number | null;
+
+  isOutOfStock: boolean;
+  isLowStock: boolean;
+  stockStatus: StockStatus;
+
+  lastTransactionAt?: Timestamp | null;
   updatedAt: Timestamp;
 }
 
@@ -22,6 +45,7 @@ export interface InventoryTransactionDoc {
   postedAt: Timestamp;
   requestId: string;
   createdAt: Timestamp;
+  relatedTransactionGroupId?: string | null;
 }
 
 export interface InventoryTransactionLineDoc {

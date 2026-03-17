@@ -5,7 +5,7 @@ const https_1 = require("firebase-functions/v2/https");
 const firestore_1 = require("../core/firestore");
 class ProductRepo {
     async create(workspaceId, input) {
-        var _a, _b, _c, _d;
+        var _a, _b, _c, _d, _e, _f, _g;
         const now = firestore_1.Timestamp.now();
         const ref = (0, firestore_1.productsCol)(workspaceId).doc();
         const sku = input.sku.trim().toUpperCase();
@@ -27,6 +27,9 @@ class ProductRepo {
             barcodeAliases: (_c = input.barcodeAliases) !== null && _c !== void 0 ? _c : [],
             unit: (_d = input.unit) !== null && _d !== void 0 ? _d : "each",
             isActive: true,
+            lowStockThreshold: (_e = input.lowStockThreshold) !== null && _e !== void 0 ? _e : null,
+            reorderPoint: (_f = input.reorderPoint) !== null && _f !== void 0 ? _f : null,
+            reorderQuantity: (_g = input.reorderQuantity) !== null && _g !== void 0 ? _g : null,
             createdAt: now,
             updatedAt: now,
         };

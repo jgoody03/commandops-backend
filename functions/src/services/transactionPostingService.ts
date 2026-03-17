@@ -10,6 +10,34 @@ import { ProductRepo } from "../repositories/productRepo";
 import { InventoryBalanceRepo } from "../repositories/inventoryBalanceRepo";
 import { InventoryTransactionRepo } from "../repositories/inventoryTransactionRepo";
 
+type HydratedReceiveLine = {
+  productId: string;
+  sku: string;
+  quantity: number;
+  unitCost?: number | null;
+  barcode?: string | null;
+  note?: string;
+  product: Awaited<ReturnType<ProductRepo["getById"]>>;
+};
+
+type HydratedAdjustLine = {
+  productId: string;
+  sku: string;
+  quantity: number;
+  barcode?: string | null;
+  note?: string;
+  product: Awaited<ReturnType<ProductRepo["getById"]>>;
+};
+
+type HydratedMoveLine = {
+  productId: string;
+  sku: string;
+  quantity: number;
+  barcode?: string | null;
+  note?: string;
+  product: Awaited<ReturnType<ProductRepo["getById"]>>;
+};
+
 export class TransactionPostingService {
   private locationRepo = new LocationRepo();
   private productRepo = new ProductRepo();
@@ -25,9 +53,13 @@ export class TransactionPostingService {
       throw new HttpsError("invalid-argument", "At least one line is required.");
     }
 
-    await this.locationRepo.assertActive(input.workspaceId, input.locationId);
+    const location = await this.locationRepo.assertActive(
+      input.workspaceId,
+      input.locationId
+    );
 
-    const hydratedLines = [];
+    const hydratedLines: HydratedReceiveLine[] = [];
+
     for (const line of input.lines) {
       if (!Number.isFinite(line.quantity) || line.quantity <= 0) {
         throw new HttpsError(
@@ -48,6 +80,7 @@ export class TransactionPostingService {
         unitCost: line.unitCost ?? null,
         barcode: line.barcode ?? null,
         ...(line.note ? { note: line.note } : {}),
+        product,
       });
     }
 
@@ -64,15 +97,23 @@ export class TransactionPostingService {
         postedBy,
         postedAt,
         requestId,
+        relatedTransactionGroupId: null,
       },
-      hydratedLines
+      hydratedLines.map((line) => ({
+        productId: line.productId,
+        sku: line.sku,
+        quantity: line.quantity,
+        unitCost: line.unitCost ?? null,
+        barcode: line.barcode ?? null,
+        ...(line.note ? { note: line.note } : {}),
+      }))
     );
 
     for (const line of hydratedLines) {
       await this.balanceRepo.incrementOnHand(
         input.workspaceId,
-        input.locationId,
-        line.productId,
+        location,
+        line.product,
         line.quantity,
         postedAt
       );
@@ -86,7 +127,7 @@ export class TransactionPostingService {
     };
   }
 
-    async postAdjust(
+  async postAdjust(
     input: PostAdjustInventoryInput,
     postedBy: string,
     requestId: string
@@ -95,15 +136,12 @@ export class TransactionPostingService {
       throw new HttpsError("invalid-argument", "At least one line is required.");
     }
 
-    await this.locationRepo.assertActive(input.workspaceId, input.locationId);
+    const location = await this.locationRepo.assertActive(
+      input.workspaceId,
+      input.locationId
+    );
 
-    const hydratedLines: Array<{
-      productId: string;
-      sku: string;
-      quantity: number;
-      barcode?: string | null;
-      note?: string;
-    }> = [];
+    const hydratedLines: HydratedAdjustLine[] = [];
 
     for (const line of input.lines) {
       if (!Number.isFinite(line.quantityDelta) || line.quantityDelta === 0) {
@@ -124,6 +162,7 @@ export class TransactionPostingService {
         quantity: line.quantityDelta,
         barcode: line.barcode ?? null,
         ...(line.note ? { note: line.note } : {}),
+        product,
       });
     }
 
@@ -168,8 +207,8 @@ export class TransactionPostingService {
 
         this.balanceRepo.setAbsoluteInTransaction(tx, {
           workspaceId: input.workspaceId,
-          locationId: input.locationId,
-          productId: line.productId,
+          location,
+          product: line.product,
           onHand: nextOnHand,
           available: nextAvailable,
           transactionAt: postedAt,
@@ -188,6 +227,7 @@ export class TransactionPostingService {
           postedBy,
           postedAt,
           requestId,
+          relatedTransactionGroupId: null,
         },
         hydratedLines.map((line) => ({
           productId: line.productId,
@@ -207,7 +247,7 @@ export class TransactionPostingService {
       locationId: input.locationId,
     };
   }
-  
+
   async postMove(
     input: PostMoveInventoryInput,
     postedBy: string,
@@ -224,16 +264,17 @@ export class TransactionPostingService {
       );
     }
 
-    await this.locationRepo.assertActive(input.workspaceId, input.sourceLocationId);
-    await this.locationRepo.assertActive(input.workspaceId, input.targetLocationId);
+    const sourceLocation = await this.locationRepo.assertActive(
+      input.workspaceId,
+      input.sourceLocationId
+    );
 
-    const hydratedLines: Array<{
-      productId: string;
-      sku: string;
-      quantity: number;
-      barcode?: string | null;
-      note?: string;
-    }> = [];
+    const targetLocation = await this.locationRepo.assertActive(
+      input.workspaceId,
+      input.targetLocationId
+    );
+
+    const hydratedLines: HydratedMoveLine[] = [];
 
     for (const line of input.lines) {
       if (!Number.isFinite(line.quantity) || line.quantity <= 0) {
@@ -254,12 +295,13 @@ export class TransactionPostingService {
         quantity: line.quantity,
         barcode: line.barcode ?? null,
         ...(line.note ? { note: line.note } : {}),
+        product,
       });
     }
 
     const postedAt = Timestamp.now();
 
-    const transactionId = await db.runTransaction(async (tx) => {
+    const result = await db.runTransaction(async (tx) => {
       for (const line of hydratedLines) {
         const sourceBalance = await this.balanceRepo.getInTransaction(
           tx,
@@ -271,7 +313,10 @@ export class TransactionPostingService {
         const currentSourceOnHand = sourceBalance?.onHand ?? 0;
         const currentSourceAvailable = sourceBalance?.available ?? 0;
 
-        if (currentSourceOnHand < line.quantity || currentSourceAvailable < line.quantity) {
+        if (
+          currentSourceOnHand < line.quantity ||
+          currentSourceAvailable < line.quantity
+        ) {
           throw new HttpsError(
             "failed-precondition",
             `Insufficient inventory for SKU ${line.sku} at source location.`
@@ -295,10 +340,12 @@ export class TransactionPostingService {
         );
 
         const nextSourceOnHand = (sourceBalance?.onHand ?? 0) - line.quantity;
-        const nextSourceAvailable = (sourceBalance?.available ?? 0) - line.quantity;
+        const nextSourceAvailable =
+          (sourceBalance?.available ?? 0) - line.quantity;
 
         const nextTargetOnHand = (targetBalance?.onHand ?? 0) + line.quantity;
-        const nextTargetAvailable = (targetBalance?.available ?? 0) + line.quantity;
+        const nextTargetAvailable =
+          (targetBalance?.available ?? 0) + line.quantity;
 
         if (nextSourceOnHand < 0 || nextSourceAvailable < 0) {
           throw new HttpsError(
@@ -309,8 +356,8 @@ export class TransactionPostingService {
 
         this.balanceRepo.setAbsoluteInTransaction(tx, {
           workspaceId: input.workspaceId,
-          locationId: input.sourceLocationId,
-          productId: line.productId,
+          location: sourceLocation,
+          product: line.product,
           onHand: nextSourceOnHand,
           available: nextSourceAvailable,
           transactionAt: postedAt,
@@ -318,19 +365,21 @@ export class TransactionPostingService {
 
         this.balanceRepo.setAbsoluteInTransaction(tx, {
           workspaceId: input.workspaceId,
-          locationId: input.targetLocationId,
-          productId: line.productId,
+          location: targetLocation,
+          product: line.product,
           onHand: nextTargetOnHand,
           available: nextTargetAvailable,
           transactionAt: postedAt,
         });
       }
-
-      return this.transactionRepo.createInTransaction(
+      const relatedTransactionGroupId =
+        this.transactionRepo.newId(input.workspaceId);
+        
+      const moveOutTransactionId = this.transactionRepo.createInTransaction(
         tx,
         input.workspaceId,
         {
-          type: "move",
+          type: "move_out",
           referenceType: "manual",
           sourceLocationId: input.sourceLocationId,
           targetLocationId: input.targetLocationId,
@@ -338,6 +387,7 @@ export class TransactionPostingService {
           postedBy,
           postedAt,
           requestId,
+          relatedTransactionGroupId,
         },
         hydratedLines.map((line) => ({
           productId: line.productId,
@@ -347,11 +397,40 @@ export class TransactionPostingService {
           ...(line.note ? { note: line.note } : {}),
         }))
       );
+
+      const moveInTransactionId = this.transactionRepo.createInTransaction(
+        tx,
+        input.workspaceId,
+        {
+          type: "move_in",
+          referenceType: "manual",
+          sourceLocationId: input.sourceLocationId,
+          targetLocationId: input.targetLocationId,
+          note: input.note ?? "",
+          postedBy,
+          postedAt,
+          requestId,
+          relatedTransactionGroupId,
+        },
+        hydratedLines.map((line) => ({
+          productId: line.productId,
+          sku: line.sku,
+          quantity: line.quantity,
+          barcode: line.barcode ?? null,
+          ...(line.note ? { note: line.note } : {}),
+        }))
+      );
+
+      return {
+        relatedTransactionGroupId,
+        moveOutTransactionId,
+        moveInTransactionId,
+      };
     });
 
     return {
       ok: true,
-      transactionId,
+      ...result,
       postedAt: postedAt.toDate().toISOString(),
       lineCount: hydratedLines.length,
       sourceLocationId: input.sourceLocationId,

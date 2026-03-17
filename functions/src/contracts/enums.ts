@@ -13,8 +13,11 @@ export type ProductUnit = "each" | "box" | "case" | "pack" | "roll" | "set";
 export type InventoryTransactionType =
   | "receive"
   | "adjust"
-  | "move"
+  | "move_out"
+  | "move_in"
   | "sale"
+  | "return"
+  | "count_set"
   | "audit";
 
 export type ReferenceType = "scan" | "manual" | "import" | "api";

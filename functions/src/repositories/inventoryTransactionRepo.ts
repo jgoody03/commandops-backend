@@ -6,6 +6,10 @@ import {
 } from "../contracts/inventory";
 
 export class InventoryTransactionRepo {
+  newId(workspaceId: string) {
+    return transactionsCol(workspaceId).doc().id;
+  }
+
   async create(
     workspaceId: string,
     header: Omit<InventoryTransactionDoc, "createdAt">,

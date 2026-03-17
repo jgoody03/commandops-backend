@@ -11,6 +11,11 @@ export interface ProductDoc {
   barcodeAliases?: string[];
   unit: ProductUnit;
   isActive: boolean;
+
+  lowStockThreshold?: number | null;
+  reorderPoint?: number | null;
+  reorderQuantity?: number | null;
+
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
@@ -22,4 +27,8 @@ export interface CreateProductInput {
   primaryBarcode?: string | null;
   barcodeAliases?: string[];
   unit?: ProductUnit;
+
+  lowStockThreshold?: number | null;
+  reorderPoint?: number | null;
+  reorderQuantity?: number | null;
 }

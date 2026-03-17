@@ -1,7 +1,17 @@
 import { Transaction } from "firebase-admin/firestore";
 import { balancesCol, Timestamp } from "../core/firestore";
-import { makeBalanceKey } from "../utils/makeBalanceKey";
 import { InventoryBalanceDoc } from "../contracts/inventory";
+import { ProductDoc } from "../contracts/products";
+import { makeBalanceKey } from "../utils/makeBalanceKey";
+import { buildInventoryBalance } from "../builders/buildInventoryBalance";
+
+type ProductWithId = ProductDoc & { id: string };
+
+type LocationLike = {
+  id: string;
+  name: string;
+  code?: string | null;
+};
 
 export class InventoryBalanceRepo {
   getRef(workspaceId: string, locationId: string, productId: string) {
@@ -28,12 +38,35 @@ export class InventoryBalanceRepo {
     return { id: snap.id, ref, ...(snap.data() as InventoryBalanceDoc) };
   }
 
+  async listByProduct(workspaceId: string, productId: string) {
+    const snap = await balancesCol(workspaceId)
+      .where("productId", "==", productId)
+      .get();
+
+    return snap.docs.map((doc) => ({
+      id: doc.id,
+      ...(doc.data() as InventoryBalanceDoc),
+    }));
+  }
+
+  async listByLocation(workspaceId: string, locationId: string) {
+    const snap = await balancesCol(workspaceId)
+      .where("locationId", "==", locationId)
+      .orderBy("nameLower")
+      .get();
+
+    return snap.docs.map((doc) => ({
+      id: doc.id,
+      ...(doc.data() as InventoryBalanceDoc),
+    }));
+  }
+
   setAbsoluteInTransaction(
     tx: Transaction,
     params: {
       workspaceId: string;
-      locationId: string;
-      productId: string;
+      location: LocationLike;
+      product: ProductWithId;
       onHand: number;
       available: number;
       transactionAt: FirebaseFirestore.Timestamp;
@@ -41,32 +74,30 @@ export class InventoryBalanceRepo {
   ) {
     const ref = this.getRef(
       params.workspaceId,
-      params.locationId,
-      params.productId
+      params.location.id,
+      params.product.id
     );
 
-    const payload: InventoryBalanceDoc = {
+    const payload = buildInventoryBalance({
       workspaceId: params.workspaceId,
-      locationId: params.locationId,
-      productId: params.productId,
+      location: params.location,
+      product: params.product,
       onHand: params.onHand,
-      hasStock: params.onHand > 0,
       available: params.available,
-      lastTransactionAt: params.transactionAt,
-      updatedAt: Timestamp.now(),
-    };
+      transactionAt: params.transactionAt,
+    });
 
     tx.set(ref, payload, { merge: true });
   }
 
   async incrementOnHand(
     workspaceId: string,
-    locationId: string,
-    productId: string,
+    location: LocationLike,
+    product: ProductWithId,
     delta: number,
     transactionAt = Timestamp.now()
   ) {
-    const ref = this.getRef(workspaceId, locationId, productId);
+    const ref = this.getRef(workspaceId, location.id, product.id);
 
     await ref.firestore.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
@@ -81,16 +112,15 @@ export class InventoryBalanceRepo {
         throw new Error("Insufficient inventory balance.");
       }
 
-      const payload: InventoryBalanceDoc = {
+      const payload = buildInventoryBalance({
+        existing: current,
         workspaceId,
-        locationId,
-        productId,
-        hasStock: nextOnHand > 0,
+        location,
+        product,
         onHand: nextOnHand,
         available: nextAvailable,
-        lastTransactionAt: transactionAt,
-        updatedAt: Timestamp.now(),
-      };
+        transactionAt,
+      });
 
       tx.set(ref, payload, { merge: true });
     });

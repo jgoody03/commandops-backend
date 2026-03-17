@@ -29,6 +29,9 @@ export class ProductRepo {
       barcodeAliases: input.barcodeAliases ?? [],
       unit: input.unit ?? "each",
       isActive: true,
+      lowStockThreshold: input.lowStockThreshold ?? null,
+      reorderPoint: input.reorderPoint ?? null,
+      reorderQuantity: input.reorderQuantity ?? null,
       createdAt: now,
       updatedAt: now,
     };
@@ -42,17 +45,20 @@ export class ProductRepo {
     if (!snap.exists) {
       throw new HttpsError("not-found", "Product not found.");
     }
+
     return { id: snap.id, ...(snap.data() as ProductDoc) };
   }
 
   async getBySku(workspaceId: string, sku: string) {
     const normalized = sku.trim().toUpperCase();
+
     const q = await productsCol(workspaceId)
       .where("sku", "==", normalized)
       .limit(1)
       .get();
 
     if (q.empty) return null;
+
     const doc = q.docs[0];
     return { id: doc.id, ...(doc.data() as ProductDoc) };
   }

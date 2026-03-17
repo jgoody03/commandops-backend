@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.InventoryBalanceRepo = void 0;
 const firestore_1 = require("../core/firestore");
 const makeBalanceKey_1 = require("../utils/makeBalanceKey");
+const buildInventoryBalance_1 = require("../builders/buildInventoryBalance");
 class InventoryBalanceRepo {
     getRef(workspaceId, locationId, productId) {
         const key = (0, makeBalanceKey_1.makeBalanceKey)(locationId, productId);
@@ -22,22 +23,33 @@ class InventoryBalanceRepo {
             return null;
         return Object.assign({ id: snap.id, ref }, snap.data());
     }
+    async listByProduct(workspaceId, productId) {
+        const snap = await (0, firestore_1.balancesCol)(workspaceId)
+            .where("productId", "==", productId)
+            .get();
+        return snap.docs.map((doc) => (Object.assign({ id: doc.id }, doc.data())));
+    }
+    async listByLocation(workspaceId, locationId) {
+        const snap = await (0, firestore_1.balancesCol)(workspaceId)
+            .where("locationId", "==", locationId)
+            .orderBy("nameLower")
+            .get();
+        return snap.docs.map((doc) => (Object.assign({ id: doc.id }, doc.data())));
+    }
     setAbsoluteInTransaction(tx, params) {
-        const ref = this.getRef(params.workspaceId, params.locationId, params.productId);
-        const payload = {
+        const ref = this.getRef(params.workspaceId, params.location.id, params.product.id);
+        const payload = (0, buildInventoryBalance_1.buildInventoryBalance)({
             workspaceId: params.workspaceId,
-            locationId: params.locationId,
-            productId: params.productId,
+            location: params.location,
+            product: params.product,
             onHand: params.onHand,
-            hasStock: params.onHand > 0,
             available: params.available,
-            lastTransactionAt: params.transactionAt,
-            updatedAt: firestore_1.Timestamp.now(),
-        };
+            transactionAt: params.transactionAt,
+        });
         tx.set(ref, payload, { merge: true });
     }
-    async incrementOnHand(workspaceId, locationId, productId, delta, transactionAt = firestore_1.Timestamp.now()) {
-        const ref = this.getRef(workspaceId, locationId, productId);
+    async incrementOnHand(workspaceId, location, product, delta, transactionAt = firestore_1.Timestamp.now()) {
+        const ref = this.getRef(workspaceId, location.id, product.id);
         await ref.firestore.runTransaction(async (tx) => {
             var _a, _b;
             const snap = await tx.get(ref);
@@ -49,16 +61,15 @@ class InventoryBalanceRepo {
             if (nextOnHand < 0 || nextAvailable < 0) {
                 throw new Error("Insufficient inventory balance.");
             }
-            const payload = {
+            const payload = (0, buildInventoryBalance_1.buildInventoryBalance)({
+                existing: current,
                 workspaceId,
-                locationId,
-                productId,
-                hasStock: nextOnHand > 0,
+                location,
+                product,
                 onHand: nextOnHand,
                 available: nextAvailable,
-                lastTransactionAt: transactionAt,
-                updatedAt: firestore_1.Timestamp.now(),
-            };
+                transactionAt,
+            });
             tx.set(ref, payload, { merge: true });
         });
     }
