@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ingestPosSale = exports.getLocationDetailSnapshot = exports.getLowStockProducts = exports.getTodaySnapshot = exports.getRecentActivityFeed = exports.getLocationSummaryList = exports.getProductSummaryList = exports.getLocationInventory = exports.searchProducts = exports.getProductByBarcode = exports.getInventoryBalances = exports.adjustInventory = exports.moveInventory = exports.bootstrapWorkspace = exports.receiveInventory = exports.quickCreateProduct = exports.resolveScanCode = exports.getMyWorkspaceContext = void 0;
+exports.getReplenishmentRecommendations = exports.getProductDetailSnapshot = exports.ingestPosSale = exports.getLocationDetailSnapshot = exports.getLowStockProducts = exports.getTodaySnapshot = exports.getRecentActivityFeed = exports.getLocationSummaryList = exports.getProductSummaryList = exports.getLocationInventory = exports.searchProducts = exports.getProductByBarcode = exports.getInventoryBalances = exports.adjustInventory = exports.moveInventory = exports.bootstrapWorkspace = exports.receiveInventory = exports.quickCreateProduct = exports.resolveScanCode = exports.getMyWorkspaceContext = void 0;
 var getMyWorkspaceContext_1 = require("./functions/getMyWorkspaceContext");
 Object.defineProperty(exports, "getMyWorkspaceContext", { enumerable: true, get: function () { return getMyWorkspaceContext_1.getMyWorkspaceContext; } });
 var resolveScanCode_1 = require("./functions/resolveScanCode");
@@ -37,4 +37,8 @@ var getLocationDetailSnapshot_1 = require("./functions/getLocationDetailSnapshot
 Object.defineProperty(exports, "getLocationDetailSnapshot", { enumerable: true, get: function () { return getLocationDetailSnapshot_1.getLocationDetailSnapshot; } });
 var ingestPosSale_1 = require("./functions/ingestPosSale");
 Object.defineProperty(exports, "ingestPosSale", { enumerable: true, get: function () { return ingestPosSale_1.ingestPosSale; } });
+var getProductDetailSnapshot_1 = require("./functions/getProductDetailSnapshot");
+Object.defineProperty(exports, "getProductDetailSnapshot", { enumerable: true, get: function () { return getProductDetailSnapshot_1.getProductDetailSnapshot; } });
+var getReplenishmentRecommendations_1 = require("./functions/getReplenishmentRecommendations");
+Object.defineProperty(exports, "getReplenishmentRecommendations", { enumerable: true, get: function () { return getReplenishmentRecommendations_1.getReplenishmentRecommendations; } });
 //# sourceMappingURL=index.js.map

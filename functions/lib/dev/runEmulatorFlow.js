@@ -25,6 +25,7 @@ const TEST_EMAIL = process.env.TEST_EMAIL || "john+commandops-local@example.com"
 const TEST_PASSWORD = process.env.TEST_PASSWORD || "CommandOps123!";
 const WORKSPACE_ID = process.env.WORKSPACE_ID || `demo-workspace-${RUN_ID}`;
 const WORKSPACE_NAME = process.env.WORKSPACE_NAME || `Demo Workspace ${RUN_ID}`;
+const SALE_QTY = Number(process.env.SALE_QTY || 2);
 const MAIN_CODE = "MAIN";
 const TRUCK1_CODE = "TRUCK1";
 const SKU = process.env.SKU || "TONER-001";
@@ -201,7 +202,7 @@ async function callFunction(name, payload) {
     return result.data;
 }
 async function main() {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, _18, _19;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, _18, _19, _20, _21, _22;
     printSection("Starting CommandOps emulator flow");
     console.log("RUN_ID:", RUN_ID);
     console.log("WORKSPACE_ID:", WORKSPACE_ID);
@@ -225,6 +226,9 @@ async function main() {
     }
     if (MOVE_QTY + ADJUST_DELTA < 0) {
         throw new Error(`Adjustment would make TRUCK1 negative. MOVE_QTY=${MOVE_QTY}, ADJUST_DELTA=${ADJUST_DELTA}`);
+    }
+    if (!Number.isFinite(SALE_QTY) || SALE_QTY <= 0) {
+        throw new Error(`Invalid SALE_QTY: ${SALE_QTY}`);
     }
     const user = await ensureSignedIn();
     console.log("Active UID:", user.uid);
@@ -590,6 +594,57 @@ async function main() {
     const topItem = locationDetailSnapshot.topItems.find((item) => item.productId === productId);
     assert(topItem, "Expected created product in location detail topItems.");
     expectNumberEqual((_19 = topItem === null || topItem === void 0 ? void 0 : topItem.onHand) !== null && _19 !== void 0 ? _19 : null, expectedTruckFinal, "location detail top item onHand");
+    if (SALE_QTY > expectedTruckFinal) {
+        throw new Error(`SALE_QTY (${SALE_QTY}) cannot be greater than TRUCK1 stock (${expectedTruckFinal}).`);
+    }
+    printSection("27) ingestPosSale");
+    const saleResult = await callFunction("ingestPosSale", {
+        workspaceId: WORKSPACE_ID,
+        locationId: truck1LocationId,
+        saleId: `sale-${RUN_ID}`,
+        orderNumber: `order-${RUN_ID}`,
+        note: `POS sale for ${RUN_ID}`,
+        lines: [
+            {
+                productId,
+                quantity: SALE_QTY,
+                barcode: BARCODE,
+            },
+        ],
+    });
+    console.log(JSON.stringify(saleResult, null, 2));
+    expectNumberEqual(saleResult.lineCount, 1, "ingestPosSale lineCount");
+    expectStringEqual(saleResult.locationId, truck1LocationId, "ingestPosSale locationId");
+    printSection("28) verify balances after sale");
+    const truckBalanceAfterSale = await readBalance(truck1LocationId, productId);
+    const expectedTruckAfterSale = expectedTruckFinal - SALE_QTY;
+    console.log(JSON.stringify(truckBalanceAfterSale, null, 2));
+    expectNumberEqual((_20 = truckBalanceAfterSale === null || truckBalanceAfterSale === void 0 ? void 0 : truckBalanceAfterSale.onHand) !== null && _20 !== void 0 ? _20 : null, expectedTruckAfterSale, "TRUCK1 balance after sale");
+    printSection("29) verify summaries after sale");
+    const productSummaryAfterSale = await readProductInventorySummary(productId);
+    const truckLocationSummaryAfterSale = await readLocationInventorySummary(truck1LocationId);
+    console.log(JSON.stringify(productSummaryAfterSale, null, 2));
+    console.log(JSON.stringify(truckLocationSummaryAfterSale, null, 2));
+    assert(productSummaryAfterSale, "Expected product summary after sale.");
+    assert(truckLocationSummaryAfterSale, "Expected truck location summary after sale.");
+    expectNumberEqual((_21 = productSummaryAfterSale === null || productSummaryAfterSale === void 0 ? void 0 : productSummaryAfterSale.totalOnHand) !== null && _21 !== void 0 ? _21 : null, expectedMainFinal + (expectedTruckFinal - SALE_QTY), "product summary totalOnHand after sale");
+    expectNumberEqual((_22 = truckLocationSummaryAfterSale === null || truckLocationSummaryAfterSale === void 0 ? void 0 : truckLocationSummaryAfterSale.totalUnits) !== null && _22 !== void 0 ? _22 : null, expectedTruckFinal - SALE_QTY, "truck location summary totalUnits after sale");
+    printSection("30) verify activity after sale");
+    const recentActivityAfterSale = await readRecentActivity();
+    console.log(JSON.stringify(recentActivityAfterSale, null, 2));
+    const activityTypesAfterSale = recentActivityAfterSale.map((item) => item.type);
+    assert(activityTypesAfterSale.includes("sale"), "Expected sale activity.");
+    printSection("31) getProductDetailSnapshot");
+    const productDetail = await callFunction("getProductDetailSnapshot", {
+        workspaceId: WORKSPACE_ID,
+        productId,
+    });
+    console.log(JSON.stringify(productDetail, null, 2));
+    printSection("32) getReplenishmentRecommendations");
+    const replenishment = await callFunction("getReplenishmentRecommendations", {
+        workspaceId: WORKSPACE_ID,
+    });
+    console.log(JSON.stringify(replenishment, null, 2));
     printSection("Flow complete");
     console.log("All emulator flow checks passed.");
 }

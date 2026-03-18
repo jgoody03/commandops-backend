@@ -1796,7 +1796,29 @@ expectStringEqual(
   const activityTypesAfterSale = recentActivityAfterSale.map((item) => item.type);
   assert(activityTypesAfterSale.includes("sale"), "Expected sale activity.");
 
-  
+  printSection("31) getProductDetailSnapshot");
+
+const productDetail = await callFunction(
+  "getProductDetailSnapshot",
+  {
+    workspaceId: WORKSPACE_ID,
+    productId,
+  }
+);
+
+console.log(JSON.stringify(productDetail, null, 2));
+
+printSection("32) getReplenishmentRecommendations");
+
+const replenishment = await callFunction(
+  "getReplenishmentRecommendations",
+  {
+    workspaceId: WORKSPACE_ID,
+  }
+);
+
+console.log(JSON.stringify(replenishment, null, 2));
+
   printSection("Flow complete");
   console.log("All emulator flow checks passed.");
 }

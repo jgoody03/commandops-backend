@@ -201,3 +201,40 @@ export type GetTodaySnapshotResult = {
   recentActivity: RecentActivityFeedItem[];
   generatedAtMs: number;
 };
+
+export type ProductLocationInventoryItem = {
+  locationId: string;
+  locationName: string;
+  locationCode?: string | null;
+  onHand: number;
+  available: number;
+  stockStatus: "ok" | "low" | "out";
+  lastTransactionAtMs: number | null;
+};
+
+export type GetProductDetailSnapshotPayload = {
+  workspaceId: string;
+  productId: string;
+  activityLimit?: number;
+};
+
+export type GetProductDetailSnapshotResult = {
+  summary: ProductSummaryListItem | null;
+  locations: ProductLocationInventoryItem[];
+  recentActivity: RecentActivityFeedItem[];
+  generatedAtMs: number;
+};
+
+export type ReplenishmentItem = ProductSummaryListItem & {
+  urgencyScore: number;
+};
+
+export type GetReplenishmentRecommendationsPayload = {
+  workspaceId: string;
+  limit?: number;
+};
+
+export type GetReplenishmentRecommendationsResult = {
+  items: ReplenishmentItem[];
+  generatedAtMs: number;
+};

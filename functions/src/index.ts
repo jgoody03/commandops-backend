@@ -16,3 +16,5 @@ export { getTodaySnapshot } from "./functions/getTodaySnapshot";
 export { getLowStockProducts } from "./functions/getLowStockProducts";
 export { getLocationDetailSnapshot } from "./functions/getLocationDetailSnapshot";
 export { ingestPosSale } from "./functions/ingestPosSale";
+export { getProductDetailSnapshot } from "./functions/getProductDetailSnapshot";
+export { getReplenishmentRecommendations } from "./functions/getReplenishmentRecommendations";
