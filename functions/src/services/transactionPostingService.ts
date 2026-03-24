@@ -203,7 +203,140 @@ export class TransactionPostingService {
       lineCount: hydratedLines.length,
     };
   }
+async postCount(
+  input: {
+    workspaceId: string;
+    locationId: string;
+    productId: string;
+    countedQuantity: number;
+    note?: string;
+    barcode?: string | null;
+  },
+  postedBy: string,
+  requestId: string
+) {
+  if (!Number.isFinite(input.countedQuantity) || input.countedQuantity < 0) {
+    throw new HttpsError(
+      "invalid-argument",
+      "countedQuantity must be a valid number greater than or equal to 0."
+    );
+  }
 
+  const location = await this.locationRepo.assertActive(
+    input.workspaceId,
+    input.locationId
+  );
+
+  const product = await this.productRepo.getById(
+    input.workspaceId,
+    input.productId
+  );
+
+  const postedAt = Timestamp.now();
+
+  const result = await db.runTransaction(async (tx) => {
+    const balance = await this.balanceRepo.getInTransaction(
+      tx,
+      input.workspaceId,
+      input.locationId,
+      input.productId
+    );
+
+    const previousQuantity = balance?.onHand ?? 0;
+    const countedQuantity = input.countedQuantity;
+    const quantityDelta = countedQuantity - previousQuantity;
+
+    if (quantityDelta === 0) {
+      return {
+        transactionId: null as string | null,
+        previousQuantity,
+        countedQuantity,
+        quantityDelta,
+      };
+    }
+
+    const nextOnHand = countedQuantity;
+    const nextAvailable = Math.max(0, (balance?.available ?? 0) + quantityDelta);
+
+    if (nextOnHand < 0 || nextAvailable < 0) {
+      throw new HttpsError(
+        "failed-precondition",
+        `Count reconciliation would make inventory negative for SKU ${product.sku}.`
+      );
+    }
+
+    this.balanceRepo.setAbsoluteInTransaction(tx, {
+      workspaceId: input.workspaceId,
+      location,
+      product,
+      onHand: nextOnHand,
+      available: nextAvailable,
+      transactionAt: postedAt,
+    });
+
+    const transactionId = await this.transactionRepo.createInTransaction(
+      tx,
+      input.workspaceId,
+      {
+        type: "adjust",
+        referenceType: "manual",
+        sourceLocationId: null,
+        targetLocationId: input.locationId,
+        note: input.note ?? "",
+        postedBy,
+        postedAt,
+        requestId,
+        relatedTransactionGroupId: null,
+      },
+      [
+        {
+          productId: input.productId,
+          sku: product.sku,
+          quantity: quantityDelta,
+          barcode: input.barcode ?? null,
+          note: input.note ?? `Cycle count set quantity to ${countedQuantity}`,
+        },
+      ]
+    );
+
+    return {
+      transactionId,
+      previousQuantity,
+      countedQuantity,
+      quantityDelta,
+    };
+  });
+
+  await this.refreshProductSummaries(input.workspaceId, [input.productId]);
+  await this.refreshLocationSummary(input.workspaceId, location);
+
+  await this.recentActivityRepo.create(
+    input.workspaceId,
+    buildRecentActivity({
+      workspaceId: input.workspaceId,
+      type: "adjust",
+      title:
+        result.quantityDelta === 0
+          ? `Count verified for ${product.name}`
+          : `Count reconciled for ${product.name}`,
+      subtitle: location.name,
+      locationId: location.id,
+      actorUserId: postedBy,
+      createdAt: postedAt,
+    })
+  );
+
+  return {
+    ok: true,
+    productId: input.productId,
+    locationId: input.locationId,
+    previousQuantity: result.previousQuantity,
+    countedQuantity: result.countedQuantity,
+    quantityDelta: result.quantityDelta,
+    transactionId: result.transactionId,
+    postedAt: postedAt.toDate().toISOString(),
+  };
+}
   async postAdjust(
     input: PostAdjustInventoryInput,
     postedBy: string,

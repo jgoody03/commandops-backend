@@ -95,6 +95,90 @@ class TransactionPostingService {
             lineCount: hydratedLines.length,
         };
     }
+    async postCount(input, postedBy, requestId) {
+        if (!Number.isFinite(input.countedQuantity) || input.countedQuantity < 0) {
+            throw new https_1.HttpsError("invalid-argument", "countedQuantity must be a valid number greater than or equal to 0.");
+        }
+        const location = await this.locationRepo.assertActive(input.workspaceId, input.locationId);
+        const product = await this.productRepo.getById(input.workspaceId, input.productId);
+        const postedAt = firestore_1.Timestamp.now();
+        const result = await firestore_1.db.runTransaction(async (tx) => {
+            var _a, _b, _c, _d, _e;
+            const balance = await this.balanceRepo.getInTransaction(tx, input.workspaceId, input.locationId, input.productId);
+            const previousQuantity = (_a = balance === null || balance === void 0 ? void 0 : balance.onHand) !== null && _a !== void 0 ? _a : 0;
+            const countedQuantity = input.countedQuantity;
+            const quantityDelta = countedQuantity - previousQuantity;
+            if (quantityDelta === 0) {
+                return {
+                    transactionId: null,
+                    previousQuantity,
+                    countedQuantity,
+                    quantityDelta,
+                };
+            }
+            const nextOnHand = countedQuantity;
+            const nextAvailable = Math.max(0, ((_b = balance === null || balance === void 0 ? void 0 : balance.available) !== null && _b !== void 0 ? _b : 0) + quantityDelta);
+            if (nextOnHand < 0 || nextAvailable < 0) {
+                throw new https_1.HttpsError("failed-precondition", `Count reconciliation would make inventory negative for SKU ${product.sku}.`);
+            }
+            this.balanceRepo.setAbsoluteInTransaction(tx, {
+                workspaceId: input.workspaceId,
+                location,
+                product,
+                onHand: nextOnHand,
+                available: nextAvailable,
+                transactionAt: postedAt,
+            });
+            const transactionId = await this.transactionRepo.createInTransaction(tx, input.workspaceId, {
+                type: "adjust",
+                referenceType: "manual",
+                sourceLocationId: null,
+                targetLocationId: input.locationId,
+                note: (_c = input.note) !== null && _c !== void 0 ? _c : "",
+                postedBy,
+                postedAt,
+                requestId,
+                relatedTransactionGroupId: null,
+            }, [
+                {
+                    productId: input.productId,
+                    sku: product.sku,
+                    quantity: quantityDelta,
+                    barcode: (_d = input.barcode) !== null && _d !== void 0 ? _d : null,
+                    note: (_e = input.note) !== null && _e !== void 0 ? _e : `Cycle count set quantity to ${countedQuantity}`,
+                },
+            ]);
+            return {
+                transactionId,
+                previousQuantity,
+                countedQuantity,
+                quantityDelta,
+            };
+        });
+        await this.refreshProductSummaries(input.workspaceId, [input.productId]);
+        await this.refreshLocationSummary(input.workspaceId, location);
+        await this.recentActivityRepo.create(input.workspaceId, (0, buildRecentActivity_1.buildRecentActivity)({
+            workspaceId: input.workspaceId,
+            type: "adjust",
+            title: result.quantityDelta === 0
+                ? `Count verified for ${product.name}`
+                : `Count reconciled for ${product.name}`,
+            subtitle: location.name,
+            locationId: location.id,
+            actorUserId: postedBy,
+            createdAt: postedAt,
+        }));
+        return {
+            ok: true,
+            productId: input.productId,
+            locationId: input.locationId,
+            previousQuantity: result.previousQuantity,
+            countedQuantity: result.countedQuantity,
+            quantityDelta: result.quantityDelta,
+            transactionId: result.transactionId,
+            postedAt: postedAt.toDate().toISOString(),
+        };
+    }
     async postAdjust(input, postedBy, requestId) {
         var _a;
         if (!input.lines.length) {

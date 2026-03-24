@@ -19,3 +19,4 @@ export { ingestPosSale } from "./functions/ingestPosSale";
 export { getProductDetailSnapshot } from "./functions/getProductDetailSnapshot";
 export { getReplenishmentRecommendations } from "./functions/getReplenishmentRecommendations";
 export { getLocationOptions } from "./functions/getLocationOptions";
+export { countInventory } from "./functions/countInventory";
