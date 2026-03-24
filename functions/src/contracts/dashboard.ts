@@ -238,3 +238,14 @@ export type GetReplenishmentRecommendationsResult = {
   items: ReplenishmentItem[];
   generatedAtMs: number;
 };
+
+export type LocationOptionItem = {
+  locationId: string;
+  locationName: string;
+  locationCode: string | null;
+  isDefault: boolean;
+};
+
+export type GetLocationOptionsResult = {
+  items: LocationOptionItem[];
+};

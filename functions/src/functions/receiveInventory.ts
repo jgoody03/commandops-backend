@@ -21,14 +21,30 @@ export const receiveInventory = onCall(async (request) => {
 
   await assertWorkspaceMembership(workspaceId, request.auth.uid);
 
-  return service.postReceive(
-    {
-      workspaceId,
-      locationId,
-      note,
-      lines,
-    },
-    request.auth.uid,
-    makeRequestId()
-  );
+  console.log("receiveInventory request", {
+  workspaceId,
+  locationId,
+  lines,
+  note,
+});
+
+  try {
+    return await service.postReceive(
+      {
+        workspaceId,
+        locationId,
+        note,
+        lines,
+      },
+      request.auth.uid,
+      makeRequestId()
+    );
+  } catch (error) {
+    console.error("receiveInventory failed", error);
+
+    throw new HttpsError(
+      "internal",
+      error instanceof Error ? error.message : "Receive inventory failed."
+    );
+  }
 });

@@ -19,11 +19,23 @@ exports.receiveInventory = (0, https_1.onCall)(async (request) => {
         throw new https_1.HttpsError("invalid-argument", "workspaceId and locationId are required.");
     }
     await (0, auth_1.assertWorkspaceMembership)(workspaceId, request.auth.uid);
-    return service.postReceive({
+    console.log("receiveInventory request", {
         workspaceId,
         locationId,
-        note,
         lines,
-    }, request.auth.uid, (0, makeRequestId_1.makeRequestId)());
+        note,
+    });
+    try {
+        return await service.postReceive({
+            workspaceId,
+            locationId,
+            note,
+            lines,
+        }, request.auth.uid, (0, makeRequestId_1.makeRequestId)());
+    }
+    catch (error) {
+        console.error("receiveInventory failed", error);
+        throw new https_1.HttpsError("internal", error instanceof Error ? error.message : "Receive inventory failed.");
+    }
 });
 //# sourceMappingURL=receiveInventory.js.map
