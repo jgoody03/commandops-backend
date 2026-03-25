@@ -123,80 +123,93 @@ function matchesQuery(item: ProductSummaryListItem, q?: string): boolean {
 
 export const getProductSummaryList = onCall(
   async (request): Promise<GetProductSummaryListResult> => {
-    const uid = requireAuth(request.auth?.uid);
+    try {
+      const uid = requireAuth(request.auth?.uid);
 
-    const workspaceId = parseRequiredString(
-      request.data?.workspaceId,
-      "workspaceId"
-    );
-    const limit = parseLimit(request.data?.limit);
-    const cursor = parseCursor(request.data?.cursor);
-    const queryText = normalizeQuery(parseOptionalString(request.data?.query));
-    const stockStatus = parseOptionalString(request.data?.stockStatus) as
-      | "ok"
-      | "low"
-      | "out"
-      | undefined;
+      const workspaceId = parseRequiredString(
+        request.data?.workspaceId,
+        "workspaceId"
+      );
+      const limit = parseLimit(request.data?.limit);
+      const cursor = parseCursor(request.data?.cursor);
+      const queryText = normalizeQuery(parseOptionalString(request.data?.query));
+      const stockStatus = parseOptionalString(request.data?.stockStatus) as
+        | "ok"
+        | "low"
+        | "out"
+        | undefined;
 
-    if (
-      stockStatus &&
-      stockStatus !== "ok" &&
-      stockStatus !== "low" &&
-      stockStatus !== "out"
-    ) {
+      if (
+        stockStatus &&
+        stockStatus !== "ok" &&
+        stockStatus !== "low" &&
+        stockStatus !== "out"
+      ) {
+        throw new HttpsError(
+          "invalid-argument",
+          "stockStatus must be one of: ok, low, out."
+        );
+      }
+
+      await assertWorkspaceMembership(workspaceId, uid);
+
+      let query: FirebaseFirestore.Query<FirebaseFirestore.DocumentData> =
+        productInventorySummaryCol(workspaceId)
+          .orderBy("updatedAt", "desc")
+          .orderBy(FieldPath.documentId(), "desc");
+
+      if (stockStatus) {
+        query = query.where("stockStatus", "==", stockStatus);
+      }
+
+      if (cursor) {
+        query = query.startAfter(
+          Timestamp.fromMillis(cursor.updatedAtMs),
+          cursor.docId
+        );
+      }
+
+      const snapshot = await query.limit(limit + 10).get();
+
+      const filteredDocs = snapshot.docs.filter((doc) => {
+        const item = toResponseItem(
+          doc.id,
+          doc.data() as ProductInventorySummaryDoc
+        );
+        return matchesQuery(item, queryText);
+      });
+
+      const pageDocs = filteredDocs.slice(0, limit);
+      const hasMore =
+        filteredDocs.length > limit || snapshot.docs.length > limit;
+
+      const items = pageDocs.map((doc) =>
+        toResponseItem(doc.id, doc.data() as ProductInventorySummaryDoc)
+      );
+
+      const lastDoc = pageDocs[pageDocs.length - 1];
+      const lastItem =
+        lastDoc?.data() as ProductInventorySummaryDoc | undefined;
+
+      return {
+        items,
+        nextCursor:
+          hasMore && lastDoc && lastItem?.updatedAt
+            ? {
+                updatedAtMs: lastItem.updatedAt.toMillis(),
+                docId: lastDoc.id,
+              }
+            : null,
+      };
+    } catch (error) {
+      console.error("getProductSummaryList failed", error);
+
       throw new HttpsError(
-        "invalid-argument",
-        "stockStatus must be one of: ok, low, out."
+        "internal",
+        error instanceof Error
+          ? error.message
+          : "getProductSummaryList failed."
       );
     }
-
-    await assertWorkspaceMembership(workspaceId, uid);
-
-    let query: FirebaseFirestore.Query<FirebaseFirestore.DocumentData> =
-      productInventorySummaryCol(workspaceId)
-        .orderBy("updatedAt", "desc")
-        .orderBy(FieldPath.documentId(), "desc");
-
-    if (stockStatus) {
-      query = query.where("stockStatus", "==", stockStatus);
-    }
-
-    if (cursor) {
-      query = query.startAfter(
-        Timestamp.fromMillis(cursor.updatedAtMs),
-        cursor.docId
-      );
-    }
-
-    const snapshot = await query.limit(limit + 10).get();
-
-    const filteredDocs = snapshot.docs.filter((doc) => {
-      const item = toResponseItem(
-        doc.id,
-        doc.data() as ProductInventorySummaryDoc
-      );
-      return matchesQuery(item, queryText);
-    });
-
-    const pageDocs = filteredDocs.slice(0, limit);
-    const hasMore = filteredDocs.length > limit || snapshot.docs.length > limit;
-
-    const items = pageDocs.map((doc) =>
-      toResponseItem(doc.id, doc.data() as ProductInventorySummaryDoc)
-    );
-
-    const lastDoc = pageDocs[pageDocs.length - 1];
-    const lastItem = lastDoc?.data() as ProductInventorySummaryDoc | undefined;
-
-    return {
-      items,
-      nextCursor:
-        hasMore && lastDoc && lastItem?.updatedAt
-          ? {
-              updatedAtMs: lastItem.updatedAt.toMillis(),
-              docId: lastDoc.id,
-            }
-          : null,
-    };
   }
 );

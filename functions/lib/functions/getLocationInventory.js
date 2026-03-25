@@ -70,62 +70,68 @@ async function loadProductsById(workspaceId, productIds) {
 }
 exports.getLocationInventory = (0, https_1.onCall)(async (request) => {
     var _a, _b, _c, _d, _e;
-    const uid = requireAuth((_a = request.auth) === null || _a === void 0 ? void 0 : _a.uid);
-    const workspaceId = parseRequiredString((_b = request.data) === null || _b === void 0 ? void 0 : _b.workspaceId, "workspaceId");
-    const locationId = parseRequiredString((_c = request.data) === null || _c === void 0 ? void 0 : _c.locationId, "locationId");
-    const limit = parseLimit((_d = request.data) === null || _d === void 0 ? void 0 : _d.limit);
-    const cursor = parseCursor((_e = request.data) === null || _e === void 0 ? void 0 : _e.cursor);
-    await (0, auth_1.assertWorkspaceMembership)(workspaceId, uid);
-    let query = (0, firestore_2.balancesCol)(workspaceId)
-        .where("locationId", "==", locationId)
-        .orderBy("updatedAt", "desc")
-        .orderBy(firestore_1.FieldPath.documentId(), "desc");
-    if (cursor) {
-        query = query.startAfter(firestore_1.Timestamp.fromMillis(cursor.updatedAtMs), cursor.docId);
-    }
-    const snapshot = await query.limit(limit + 1).get();
-    const pageDocs = snapshot.docs.slice(0, limit);
-    const hasMore = snapshot.docs.length > limit;
-    const balances = pageDocs.map((doc) => (Object.assign({ id: doc.id }, doc.data())));
-    const productMap = await loadProductsById(workspaceId, balances.map((balance) => balance.productId));
-    const items = balances.map((balance) => {
-        var _a, _b, _c, _d, _e;
-        const product = productMap.get(balance.productId);
+    try {
+        const uid = requireAuth((_a = request.auth) === null || _a === void 0 ? void 0 : _a.uid);
+        const workspaceId = parseRequiredString((_b = request.data) === null || _b === void 0 ? void 0 : _b.workspaceId, "workspaceId");
+        const locationId = parseRequiredString((_c = request.data) === null || _c === void 0 ? void 0 : _c.locationId, "locationId");
+        const limit = parseLimit((_d = request.data) === null || _d === void 0 ? void 0 : _d.limit);
+        const cursor = parseCursor((_e = request.data) === null || _e === void 0 ? void 0 : _e.cursor);
+        await (0, auth_1.assertWorkspaceMembership)(workspaceId, uid);
+        let query = (0, firestore_2.balancesCol)(workspaceId)
+            .where("locationId", "==", locationId)
+            .orderBy("updatedAt", "desc")
+            .orderBy(firestore_1.FieldPath.documentId(), "desc");
+        if (cursor) {
+            query = query.startAfter(firestore_1.Timestamp.fromMillis(cursor.updatedAtMs), cursor.docId);
+        }
+        const snapshot = await query.limit(limit + 1).get();
+        const pageDocs = snapshot.docs.slice(0, limit);
+        const hasMore = snapshot.docs.length > limit;
+        const balances = pageDocs.map((doc) => (Object.assign({ id: doc.id }, doc.data())));
+        const productMap = await loadProductsById(workspaceId, balances.map((balance) => balance.productId));
+        const items = balances.map((balance) => {
+            var _a, _b, _c, _d, _e;
+            const product = productMap.get(balance.productId);
+            return {
+                id: balance.id,
+                workspaceId: balance.workspaceId,
+                locationId: balance.locationId,
+                productId: balance.productId,
+                onHand: balance.onHand,
+                available: balance.available,
+                lastTransactionAtMs: (_b = (_a = balance.lastTransactionAt) === null || _a === void 0 ? void 0 : _a.toMillis()) !== null && _b !== void 0 ? _b : null,
+                updatedAtMs: (_d = (_c = balance.updatedAt) === null || _c === void 0 ? void 0 : _c.toMillis()) !== null && _d !== void 0 ? _d : null,
+                product: product
+                    ? {
+                        id: balance.productId,
+                        sku: product.sku,
+                        name: product.name,
+                        description: product.description,
+                        primaryBarcode: (_e = product.primaryBarcode) !== null && _e !== void 0 ? _e : null,
+                        barcodeAliases: Array.isArray(product.barcodeAliases)
+                            ? product.barcodeAliases
+                            : [],
+                        unit: product.unit,
+                        isActive: product.isActive,
+                    }
+                    : null,
+            };
+        });
+        const lastDoc = pageDocs[pageDocs.length - 1];
+        const lastBalance = lastDoc === null || lastDoc === void 0 ? void 0 : lastDoc.data();
         return {
-            id: balance.id,
-            workspaceId: balance.workspaceId,
-            locationId: balance.locationId,
-            productId: balance.productId,
-            onHand: balance.onHand,
-            available: balance.available,
-            lastTransactionAtMs: (_b = (_a = balance.lastTransactionAt) === null || _a === void 0 ? void 0 : _a.toMillis()) !== null && _b !== void 0 ? _b : null,
-            updatedAtMs: (_d = (_c = balance.updatedAt) === null || _c === void 0 ? void 0 : _c.toMillis()) !== null && _d !== void 0 ? _d : null,
-            product: product
+            items,
+            nextCursor: hasMore && lastDoc && (lastBalance === null || lastBalance === void 0 ? void 0 : lastBalance.updatedAt)
                 ? {
-                    id: balance.productId,
-                    sku: product.sku,
-                    name: product.name,
-                    description: product.description,
-                    primaryBarcode: (_e = product.primaryBarcode) !== null && _e !== void 0 ? _e : null,
-                    barcodeAliases: Array.isArray(product.barcodeAliases)
-                        ? product.barcodeAliases
-                        : [],
-                    unit: product.unit,
-                    isActive: product.isActive,
+                    updatedAtMs: lastBalance.updatedAt.toMillis(),
+                    docId: lastDoc.id,
                 }
                 : null,
         };
-    });
-    const lastDoc = pageDocs[pageDocs.length - 1];
-    const lastBalance = lastDoc === null || lastDoc === void 0 ? void 0 : lastDoc.data();
-    return {
-        items,
-        nextCursor: hasMore && lastDoc && (lastBalance === null || lastBalance === void 0 ? void 0 : lastBalance.updatedAt)
-            ? {
-                updatedAtMs: lastBalance.updatedAt.toMillis(),
-                docId: lastDoc.id,
-            }
-            : null,
-    };
+    }
+    catch (error) {
+        console.error("someCallable failed", error);
+        throw new https_1.HttpsError("internal", error instanceof Error ? error.message : "someCallable failed.");
+    }
 });
 //# sourceMappingURL=getLocationInventory.js.map

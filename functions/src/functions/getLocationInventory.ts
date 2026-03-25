@@ -142,6 +142,7 @@ async function loadProductsById(
 
 export const getLocationInventory = onCall(
   async (request): Promise<GetLocationInventoryResponse> => {
+    try {
     const uid = requireAuth(request.auth?.uid);
 
     const workspaceId = parseRequiredString(
@@ -223,6 +224,14 @@ export const getLocationInventory = onCall(
               docId: lastDoc.id,
             }
           : null,
-    };
+          };
+          } catch (error) {
+      console.error("someCallable failed", error);
+
+      throw new HttpsError(
+        "internal",
+        error instanceof Error ? error.message : "someCallable failed."
+      );
+    }
   }
 );

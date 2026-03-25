@@ -74,34 +74,42 @@ function toActivity(id, doc) {
 }
 exports.getProductDetailSnapshot = (0, https_1.onCall)(async (request) => {
     var _a, _b, _c, _d;
-    const uid = requireAuth((_a = request.auth) === null || _a === void 0 ? void 0 : _a.uid);
-    const workspaceId = parseRequiredString((_b = request.data) === null || _b === void 0 ? void 0 : _b.workspaceId, "workspaceId");
-    const productId = parseRequiredString((_c = request.data) === null || _c === void 0 ? void 0 : _c.productId, "productId");
-    const activityLimit = parseLimit((_d = request.data) === null || _d === void 0 ? void 0 : _d.activityLimit, 10, 50);
-    await (0, auth_1.assertWorkspaceMembership)(workspaceId, uid);
-    const [summarySnap, balancesSnap, activitySnap] = await Promise.all([
-        (0, firestore_1.productInventorySummaryCol)(workspaceId).doc(productId).get(),
-        (0, firestore_1.balancesCol)(workspaceId)
-            .where("productId", "==", productId)
-            .get(),
-        (0, firestore_1.recentActivityCol)(workspaceId)
-            .where("productId", "==", productId)
-            .orderBy("createdAt", "desc")
-            .limit(activityLimit)
-            .get(),
-    ]);
-    const summary = summarySnap.exists
-        ? toSummary(summarySnap.id, summarySnap.data())
-        : null;
-    const locations = balancesSnap.docs
-        .map((d) => toLocationItem(d.data()))
-        .sort((a, b) => b.onHand - a.onHand);
-    const recentActivity = activitySnap.docs.map((d) => toActivity(d.id, d.data()));
-    return {
-        summary,
-        locations,
-        recentActivity,
-        generatedAtMs: Date.now(),
-    };
+    try {
+        const uid = requireAuth((_a = request.auth) === null || _a === void 0 ? void 0 : _a.uid);
+        const workspaceId = parseRequiredString((_b = request.data) === null || _b === void 0 ? void 0 : _b.workspaceId, "workspaceId");
+        const productId = parseRequiredString((_c = request.data) === null || _c === void 0 ? void 0 : _c.productId, "productId");
+        const activityLimit = parseLimit((_d = request.data) === null || _d === void 0 ? void 0 : _d.activityLimit, 10, 50);
+        await (0, auth_1.assertWorkspaceMembership)(workspaceId, uid);
+        const [summarySnap, balancesSnap, activitySnap] = await Promise.all([
+            (0, firestore_1.productInventorySummaryCol)(workspaceId).doc(productId).get(),
+            (0, firestore_1.balancesCol)(workspaceId)
+                .where("productId", "==", productId)
+                .get(),
+            (0, firestore_1.recentActivityCol)(workspaceId)
+                .where("productId", "==", productId)
+                .orderBy("createdAt", "desc")
+                .limit(activityLimit)
+                .get(),
+        ]);
+        const summary = summarySnap.exists
+            ? toSummary(summarySnap.id, summarySnap.data())
+            : null;
+        const locations = balancesSnap.docs
+            .map((d) => toLocationItem(d.data()))
+            .sort((a, b) => b.onHand - a.onHand);
+        const recentActivity = activitySnap.docs.map((d) => toActivity(d.id, d.data()));
+        return {
+            summary,
+            locations,
+            recentActivity,
+            generatedAtMs: Date.now(),
+        };
+    }
+    catch (error) {
+        console.error("getProductDetailSnapshot failed", error);
+        throw new https_1.HttpsError("internal", error instanceof Error
+            ? error.message
+            : "getProductDetailSnapshot failed.");
+    }
 });
 //# sourceMappingURL=getProductDetailSnapshot.js.map

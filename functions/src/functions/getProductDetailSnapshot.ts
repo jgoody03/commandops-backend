@@ -93,43 +93,63 @@ function toActivity(
 
 export const getProductDetailSnapshot = onCall(
   async (request): Promise<GetProductDetailSnapshotResult> => {
-    const uid = requireAuth(request.auth?.uid);
+    try {
+      const uid = requireAuth(request.auth?.uid);
 
-    const workspaceId = parseRequiredString(request.data?.workspaceId, "workspaceId");
-    const productId = parseRequiredString(request.data?.productId, "productId");
-    const activityLimit = parseLimit(request.data?.activityLimit, 10, 50);
+      const workspaceId = parseRequiredString(
+        request.data?.workspaceId,
+        "workspaceId"
+      );
+      const productId = parseRequiredString(
+        request.data?.productId,
+        "productId"
+      );
+      const activityLimit = parseLimit(request.data?.activityLimit, 10, 50);
 
-    await assertWorkspaceMembership(workspaceId, uid);
+      await assertWorkspaceMembership(workspaceId, uid);
 
-    const [summarySnap, balancesSnap, activitySnap] = await Promise.all([
-      productInventorySummaryCol(workspaceId).doc(productId).get(),
-      balancesCol(workspaceId)
-        .where("productId", "==", productId)
-        .get(),
-      recentActivityCol(workspaceId)
-        .where("productId", "==", productId)
-        .orderBy("createdAt", "desc")
-        .limit(activityLimit)
-        .get(),
-    ]);
+      const [summarySnap, balancesSnap, activitySnap] = await Promise.all([
+        productInventorySummaryCol(workspaceId).doc(productId).get(),
+        balancesCol(workspaceId)
+          .where("productId", "==", productId)
+          .get(),
+        recentActivityCol(workspaceId)
+          .where("productId", "==", productId)
+          .orderBy("createdAt", "desc")
+          .limit(activityLimit)
+          .get(),
+      ]);
 
-    const summary = summarySnap.exists
-      ? toSummary(summarySnap.id, summarySnap.data() as ProductInventorySummaryDoc)
-      : null;
+      const summary = summarySnap.exists
+        ? toSummary(
+            summarySnap.id,
+            summarySnap.data() as ProductInventorySummaryDoc
+          )
+        : null;
 
-    const locations = balancesSnap.docs
-      .map((d) => toLocationItem(d.data() as InventoryBalanceDoc))
-      .sort((a, b) => b.onHand - a.onHand);
+      const locations = balancesSnap.docs
+        .map((d) => toLocationItem(d.data() as InventoryBalanceDoc))
+        .sort((a, b) => b.onHand - a.onHand);
 
-    const recentActivity = activitySnap.docs.map((d) =>
-      toActivity(d.id, d.data() as RecentActivityDoc)
-    );
+      const recentActivity = activitySnap.docs.map((d) =>
+        toActivity(d.id, d.data() as RecentActivityDoc)
+      );
 
-    return {
-      summary,
-      locations,
-      recentActivity,
-      generatedAtMs: Date.now(),
-    };
+      return {
+        summary,
+        locations,
+        recentActivity,
+        generatedAtMs: Date.now(),
+      };
+    } catch (error) {
+      console.error("getProductDetailSnapshot failed", error);
+
+      throw new HttpsError(
+        "internal",
+        error instanceof Error
+          ? error.message
+          : "getProductDetailSnapshot failed."
+      );
+    }
   }
 );

@@ -94,46 +94,54 @@ function matchesQuery(item, q) {
 }
 exports.getProductSummaryList = (0, https_1.onCall)(async (request) => {
     var _a, _b, _c, _d, _e, _f;
-    const uid = requireAuth((_a = request.auth) === null || _a === void 0 ? void 0 : _a.uid);
-    const workspaceId = parseRequiredString((_b = request.data) === null || _b === void 0 ? void 0 : _b.workspaceId, "workspaceId");
-    const limit = parseLimit((_c = request.data) === null || _c === void 0 ? void 0 : _c.limit);
-    const cursor = parseCursor((_d = request.data) === null || _d === void 0 ? void 0 : _d.cursor);
-    const queryText = normalizeQuery(parseOptionalString((_e = request.data) === null || _e === void 0 ? void 0 : _e.query));
-    const stockStatus = parseOptionalString((_f = request.data) === null || _f === void 0 ? void 0 : _f.stockStatus);
-    if (stockStatus &&
-        stockStatus !== "ok" &&
-        stockStatus !== "low" &&
-        stockStatus !== "out") {
-        throw new https_1.HttpsError("invalid-argument", "stockStatus must be one of: ok, low, out.");
+    try {
+        const uid = requireAuth((_a = request.auth) === null || _a === void 0 ? void 0 : _a.uid);
+        const workspaceId = parseRequiredString((_b = request.data) === null || _b === void 0 ? void 0 : _b.workspaceId, "workspaceId");
+        const limit = parseLimit((_c = request.data) === null || _c === void 0 ? void 0 : _c.limit);
+        const cursor = parseCursor((_d = request.data) === null || _d === void 0 ? void 0 : _d.cursor);
+        const queryText = normalizeQuery(parseOptionalString((_e = request.data) === null || _e === void 0 ? void 0 : _e.query));
+        const stockStatus = parseOptionalString((_f = request.data) === null || _f === void 0 ? void 0 : _f.stockStatus);
+        if (stockStatus &&
+            stockStatus !== "ok" &&
+            stockStatus !== "low" &&
+            stockStatus !== "out") {
+            throw new https_1.HttpsError("invalid-argument", "stockStatus must be one of: ok, low, out.");
+        }
+        await (0, auth_1.assertWorkspaceMembership)(workspaceId, uid);
+        let query = (0, firestore_2.productInventorySummaryCol)(workspaceId)
+            .orderBy("updatedAt", "desc")
+            .orderBy(firestore_1.FieldPath.documentId(), "desc");
+        if (stockStatus) {
+            query = query.where("stockStatus", "==", stockStatus);
+        }
+        if (cursor) {
+            query = query.startAfter(firestore_1.Timestamp.fromMillis(cursor.updatedAtMs), cursor.docId);
+        }
+        const snapshot = await query.limit(limit + 10).get();
+        const filteredDocs = snapshot.docs.filter((doc) => {
+            const item = toResponseItem(doc.id, doc.data());
+            return matchesQuery(item, queryText);
+        });
+        const pageDocs = filteredDocs.slice(0, limit);
+        const hasMore = filteredDocs.length > limit || snapshot.docs.length > limit;
+        const items = pageDocs.map((doc) => toResponseItem(doc.id, doc.data()));
+        const lastDoc = pageDocs[pageDocs.length - 1];
+        const lastItem = lastDoc === null || lastDoc === void 0 ? void 0 : lastDoc.data();
+        return {
+            items,
+            nextCursor: hasMore && lastDoc && (lastItem === null || lastItem === void 0 ? void 0 : lastItem.updatedAt)
+                ? {
+                    updatedAtMs: lastItem.updatedAt.toMillis(),
+                    docId: lastDoc.id,
+                }
+                : null,
+        };
     }
-    await (0, auth_1.assertWorkspaceMembership)(workspaceId, uid);
-    let query = (0, firestore_2.productInventorySummaryCol)(workspaceId)
-        .orderBy("updatedAt", "desc")
-        .orderBy(firestore_1.FieldPath.documentId(), "desc");
-    if (stockStatus) {
-        query = query.where("stockStatus", "==", stockStatus);
+    catch (error) {
+        console.error("getProductSummaryList failed", error);
+        throw new https_1.HttpsError("internal", error instanceof Error
+            ? error.message
+            : "getProductSummaryList failed.");
     }
-    if (cursor) {
-        query = query.startAfter(firestore_1.Timestamp.fromMillis(cursor.updatedAtMs), cursor.docId);
-    }
-    const snapshot = await query.limit(limit + 10).get();
-    const filteredDocs = snapshot.docs.filter((doc) => {
-        const item = toResponseItem(doc.id, doc.data());
-        return matchesQuery(item, queryText);
-    });
-    const pageDocs = filteredDocs.slice(0, limit);
-    const hasMore = filteredDocs.length > limit || snapshot.docs.length > limit;
-    const items = pageDocs.map((doc) => toResponseItem(doc.id, doc.data()));
-    const lastDoc = pageDocs[pageDocs.length - 1];
-    const lastItem = lastDoc === null || lastDoc === void 0 ? void 0 : lastDoc.data();
-    return {
-        items,
-        nextCursor: hasMore && lastDoc && (lastItem === null || lastItem === void 0 ? void 0 : lastItem.updatedAt)
-            ? {
-                updatedAtMs: lastItem.updatedAt.toMillis(),
-                docId: lastDoc.id,
-            }
-            : null,
-    };
 });
 //# sourceMappingURL=getProductSummaryList.js.map
