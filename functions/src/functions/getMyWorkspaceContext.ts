@@ -11,19 +11,39 @@ export const getMyWorkspaceContext = onCall(async (request) => {
   const workspacesSnap = await db.collection("workspaces").get();
 
   for (const workspaceDoc of workspacesSnap.docs) {
-    const memberSnap = await workspaceDoc.ref.collection("members").doc(uid).get();
+    const memberSnap = await workspaceDoc.ref
+      .collection("members")
+      .doc(uid)
+      .get();
+
     if (memberSnap.exists) {
+      const membership = memberSnap.data() || {};
+      const workspace = workspaceDoc.data() || {};
+
+      const role =
+        membership.role ||
+        membership.type ||
+        membership.accessLevel ||
+        "admin";
+
+      const defaultLocationId =
+        membership.defaultLocationId ||
+        workspace.defaultLocationId ||
+        null;
+
       return {
         workspaceId: workspaceDoc.id,
-        workspace: workspaceDoc.data(),
-        membership: memberSnap.data(),
+        memberId: uid,
+        role,
+        defaultLocationId,
       };
     }
   }
 
   return {
     workspaceId: null,
-    workspace: null,
-    membership: null,
+    memberId: null,
+    role: null,
+    defaultLocationId: null,
   };
 });

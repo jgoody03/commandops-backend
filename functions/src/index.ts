@@ -20,3 +20,6 @@ export { getProductDetailSnapshot } from "./functions/getProductDetailSnapshot";
 export { getReplenishmentRecommendations } from "./functions/getReplenishmentRecommendations";
 export { getLocationOptions } from "./functions/getLocationOptions";
 export { countInventory } from "./functions/countInventory";
+export { getMoveSuggestions } from "./functions/getMoveSuggestions";
+export { createLocation } from "./functions/createLocation";
+export { getLocations } from "./functions/getLocations";

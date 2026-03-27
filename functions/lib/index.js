@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.countInventory = exports.getLocationOptions = exports.getReplenishmentRecommendations = exports.getProductDetailSnapshot = exports.ingestPosSale = exports.getLocationDetailSnapshot = exports.getLowStockProducts = exports.getTodaySnapshot = exports.getRecentActivityFeed = exports.getLocationSummaryList = exports.getProductSummaryList = exports.getLocationInventory = exports.searchProducts = exports.getProductByBarcode = exports.getInventoryBalances = exports.adjustInventory = exports.moveInventory = exports.bootstrapWorkspace = exports.receiveInventory = exports.quickCreateProduct = exports.resolveScanCode = exports.getMyWorkspaceContext = void 0;
+exports.getLocations = exports.createLocation = exports.getMoveSuggestions = exports.countInventory = exports.getLocationOptions = exports.getReplenishmentRecommendations = exports.getProductDetailSnapshot = exports.ingestPosSale = exports.getLocationDetailSnapshot = exports.getLowStockProducts = exports.getTodaySnapshot = exports.getRecentActivityFeed = exports.getLocationSummaryList = exports.getProductSummaryList = exports.getLocationInventory = exports.searchProducts = exports.getProductByBarcode = exports.getInventoryBalances = exports.adjustInventory = exports.moveInventory = exports.bootstrapWorkspace = exports.receiveInventory = exports.quickCreateProduct = exports.resolveScanCode = exports.getMyWorkspaceContext = void 0;
 var getMyWorkspaceContext_1 = require("./functions/getMyWorkspaceContext");
 Object.defineProperty(exports, "getMyWorkspaceContext", { enumerable: true, get: function () { return getMyWorkspaceContext_1.getMyWorkspaceContext; } });
 var resolveScanCode_1 = require("./functions/resolveScanCode");
@@ -45,4 +45,10 @@ var getLocationOptions_1 = require("./functions/getLocationOptions");
 Object.defineProperty(exports, "getLocationOptions", { enumerable: true, get: function () { return getLocationOptions_1.getLocationOptions; } });
 var countInventory_1 = require("./functions/countInventory");
 Object.defineProperty(exports, "countInventory", { enumerable: true, get: function () { return countInventory_1.countInventory; } });
+var getMoveSuggestions_1 = require("./functions/getMoveSuggestions");
+Object.defineProperty(exports, "getMoveSuggestions", { enumerable: true, get: function () { return getMoveSuggestions_1.getMoveSuggestions; } });
+var createLocation_1 = require("./functions/createLocation");
+Object.defineProperty(exports, "createLocation", { enumerable: true, get: function () { return createLocation_1.createLocation; } });
+var getLocations_1 = require("./functions/getLocations");
+Object.defineProperty(exports, "getLocations", { enumerable: true, get: function () { return getLocations_1.getLocations; } });
 //# sourceMappingURL=index.js.map
