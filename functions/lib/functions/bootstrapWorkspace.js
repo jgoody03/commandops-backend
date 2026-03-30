@@ -11,6 +11,10 @@ exports.bootstrapWorkspace = (0, https_1.onCall)(async (request) => {
     }
     const workspaceId = String(request.data.workspaceId || "").trim();
     const workspaceName = String(request.data.workspaceName || "").trim();
+    const phoneNumber = String(request.data.phoneNumber || "").trim();
+    const businessType = String(request.data.businessType || "").trim();
+    const expectedLocationCount = String(request.data.expectedLocationCount || "").trim();
+    const setupPreference = String(request.data.setupPreference || "").trim();
     if (!workspaceId || !workspaceName) {
         throw new https_1.HttpsError("invalid-argument", "workspaceId and workspaceName are required.");
     }
@@ -20,6 +24,10 @@ exports.bootstrapWorkspace = (0, https_1.onCall)(async (request) => {
         ownerUid: request.auth.uid,
         ownerEmail: request.auth.token.email,
         ownerDisplayName: request.auth.token.name,
+        phoneNumber: phoneNumber || undefined,
+        businessType: businessType || undefined,
+        expectedLocationCount: expectedLocationCount || undefined,
+        setupPreference: setupPreference === "device_later" ? "device_later" : "start_now",
     });
 });
 //# sourceMappingURL=bootstrapWorkspace.js.map

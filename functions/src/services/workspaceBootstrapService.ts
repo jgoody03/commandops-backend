@@ -1,4 +1,9 @@
-import { workspaceRef, membersCol, Timestamp } from "../core/firestore";
+import {
+  workspaceRef,
+  membersCol,
+  userRef,
+  Timestamp,
+} from "../core/firestore";
 import { LocationRepo } from "../repositories/locationRepo";
 
 export class WorkspaceBootstrapService {
@@ -10,6 +15,10 @@ export class WorkspaceBootstrapService {
     workspaceName: string;
     ownerEmail?: string;
     ownerDisplayName?: string;
+    phoneNumber?: string;
+    businessType?: string;
+    expectedLocationCount?: string;
+    setupPreference?: "start_now" | "device_later";
   }) {
     const now = Timestamp.now();
 
@@ -21,6 +30,17 @@ export class WorkspaceBootstrapService {
         ownerUid: params.ownerUid,
         updatedAt: now,
         createdAt: now,
+        onboarding: {
+          completed: false,
+          step: "welcome",
+          completedAt: null,
+        },
+        businessProfile: {
+          businessName: params.workspaceName.trim(),
+          businessType: params.businessType ?? "",
+          expectedLocationCount: params.expectedLocationCount ?? "",
+          setupPreference: params.setupPreference ?? "start_now",
+        },
       },
       { merge: true }
     );
@@ -31,7 +51,23 @@ export class WorkspaceBootstrapService {
         role: "owner",
         email: params.ownerEmail ?? "",
         displayName: params.ownerDisplayName ?? "",
+        phoneNumber: params.phoneNumber ?? "",
         createdAt: now,
+        updatedAt: now,
+      },
+      { merge: true }
+    );
+
+    await userRef(params.ownerUid).set(
+      {
+        uid: params.ownerUid,
+        email: params.ownerEmail ?? "",
+        displayName: params.ownerDisplayName ?? "",
+        phoneNumber: params.phoneNumber ?? "",
+        activeWorkspaceId: params.workspaceId,
+        workspaceIds: [params.workspaceId],
+        createdAt: now,
+        updatedAt: now,
       },
       { merge: true }
     );

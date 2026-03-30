@@ -1,12 +1,10 @@
-import admin from "firebase-admin";
+import { initializeApp } from "firebase-admin/app";
+import { getFirestore, Timestamp } from "firebase-admin/firestore";
 
-if (!admin.apps.length) {
-  admin.initializeApp();
-}
+initializeApp();
 
-export const db = admin.firestore();
-export const FieldValue = admin.firestore.FieldValue;
-export const Timestamp = admin.firestore.Timestamp;
+export const db = getFirestore();
+export { Timestamp };
 
 export function workspaceRef(workspaceId: string) {
   return db.collection("workspaces").doc(workspaceId);
@@ -14,6 +12,10 @@ export function workspaceRef(workspaceId: string) {
 
 export function membersCol(workspaceId: string) {
   return workspaceRef(workspaceId).collection("members");
+}
+
+export function userRef(uid: string) {
+  return db.collection("users").doc(uid);
 }
 
 export function locationsCol(workspaceId: string) {

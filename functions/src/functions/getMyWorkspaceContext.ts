@@ -8,42 +8,78 @@ export const getMyWorkspaceContext = onCall(async (request) => {
 
   const uid = request.auth.uid;
 
-  const workspacesSnap = await db.collection("workspaces").get();
+  const userSnap = await db.collection("users").doc(uid).get();
 
-  for (const workspaceDoc of workspacesSnap.docs) {
-    const memberSnap = await workspaceDoc.ref
-      .collection("members")
-      .doc(uid)
-      .get();
-
-    if (memberSnap.exists) {
-      const membership = memberSnap.data() || {};
-      const workspace = workspaceDoc.data() || {};
-
-      const role =
-        membership.role ||
-        membership.type ||
-        membership.accessLevel ||
-        "admin";
-
-      const defaultLocationId =
-        membership.defaultLocationId ||
-        workspace.defaultLocationId ||
-        null;
-
-      return {
-        workspaceId: workspaceDoc.id,
-        memberId: uid,
-        role,
-        defaultLocationId,
-      };
-    }
+  if (!userSnap.exists) {
+    return {
+      workspaceId: null,
+      memberId: null,
+      role: null,
+      defaultLocationId: null,
+      onboarding: {
+        completed: false,
+        step: "welcome",
+      },
+    };
   }
 
+  const user = userSnap.data() || {};
+  const workspaceId = String(user.activeWorkspaceId || "").trim();
+
+  if (!workspaceId) {
+    return {
+      workspaceId: null,
+      memberId: null,
+      role: null,
+      defaultLocationId: null,
+      onboarding: {
+        completed: false,
+        step: "welcome",
+      },
+    };
+  }
+
+  const [workspaceSnap, memberSnap] = await Promise.all([
+    db.collection("workspaces").doc(workspaceId).get(),
+    db.collection("workspaces").doc(workspaceId).collection("members").doc(uid).get(),
+  ]);
+
+  if (!workspaceSnap.exists || !memberSnap.exists) {
+    return {
+      workspaceId: null,
+      memberId: null,
+      role: null,
+      defaultLocationId: null,
+      onboarding: {
+        completed: false,
+        step: "welcome",
+      },
+    };
+  }
+
+  const workspace = workspaceSnap.data() || {};
+  const membership = memberSnap.data() || {};
+  const onboarding = workspace.onboarding || {};
+
+  const role =
+    membership.role ||
+    membership.type ||
+    membership.accessLevel ||
+    "admin";
+
+  const defaultLocationId =
+    membership.defaultLocationId ||
+    workspace.defaultLocationId ||
+    null;
+
   return {
-    workspaceId: null,
-    memberId: null,
-    role: null,
-    defaultLocationId: null,
+    workspaceId,
+    memberId: uid,
+    role,
+    defaultLocationId,
+    onboarding: {
+      completed: Boolean(onboarding.completed),
+      step: onboarding.step || "welcome",
+    },
   };
 });

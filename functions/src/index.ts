@@ -23,3 +23,4 @@ export { countInventory } from "./functions/countInventory";
 export { getMoveSuggestions } from "./functions/getMoveSuggestions";
 export { createLocation } from "./functions/createLocation";
 export { getLocations } from "./functions/getLocations";
+export { completeOnboarding } from "./functions/completeOnboarding";
