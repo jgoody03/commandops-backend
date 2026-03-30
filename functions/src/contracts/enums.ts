@@ -23,3 +23,17 @@ export type InventoryTransactionType =
 export type ReferenceType = "scan" | "manual" | "import" | "api";
 
 export type ScanResolutionStatus = "resolved" | "unresolved";
+
+export type AdjustmentReasonCode =
+  | "count_variance"
+  | "damaged"
+  | "expired"
+  | "shrink"
+  | "theft"
+  | "lost"
+  | "vendor_return"
+  | "customer_return_restock"
+  | "customer_return_damaged"
+  | "store_use"
+  | "promo"
+  | "other";

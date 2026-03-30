@@ -1,5 +1,7 @@
 import { Timestamp } from "firebase-admin/firestore";
 import { InventoryTransactionType, ReferenceType } from "./enums";
+import { AdjustmentReasonCode } from "./enums";
+
 
 export type StockStatus = "ok" | "low" | "out";
 
@@ -108,3 +110,17 @@ export interface PostSaleInventoryInput {
     note?: string;
   }>;
 }
+
+export type AdjustInventoryLineInput = {
+  productId: string;
+  quantityDelta: number;
+  barcode?: string;
+  reasonCode?: AdjustmentReasonCode;
+  note?: string;
+};
+
+export type AdjustInventoryInput = {
+  workspaceId: string;
+  locationId: string;
+  lines: AdjustInventoryLineInput[];
+};
