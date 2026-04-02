@@ -13,6 +13,7 @@ exports.scanEventsCol = scanEventsCol;
 exports.productInventorySummaryCol = productInventorySummaryCol;
 exports.locationInventorySummaryCol = locationInventorySummaryCol;
 exports.recentActivityCol = recentActivityCol;
+exports.vendorsCol = vendorsCol;
 const app_1 = require("firebase-admin/app");
 const firestore_1 = require("firebase-admin/firestore");
 Object.defineProperty(exports, "Timestamp", { enumerable: true, get: function () { return firestore_1.Timestamp; } });
@@ -53,5 +54,8 @@ function locationInventorySummaryCol(workspaceId) {
 }
 function recentActivityCol(workspaceId) {
     return workspaceRef(workspaceId).collection("recentActivity");
+}
+function vendorsCol(workspaceId) {
+    return workspaceRef(workspaceId).collection("vendors");
 }
 //# sourceMappingURL=firestore.js.map

@@ -13,8 +13,14 @@ exports.receiveInventory = (0, https_1.onCall)(async (request) => {
     }
     const workspaceId = String(request.data.workspaceId || "").trim();
     const locationId = String(request.data.locationId || "").trim();
+    const vendorName = request.data.vendorName
+        ? String(request.data.vendorName).trim()
+        : "";
+    const referenceNumber = request.data.referenceNumber
+        ? String(request.data.referenceNumber).trim()
+        : "";
     const lines = Array.isArray(request.data.lines) ? request.data.lines : [];
-    const note = request.data.note ? String(request.data.note) : "";
+    const note = request.data.note ? String(request.data.note).trim() : "";
     if (!workspaceId || !locationId) {
         throw new https_1.HttpsError("invalid-argument", "workspaceId and locationId are required.");
     }
@@ -22,6 +28,8 @@ exports.receiveInventory = (0, https_1.onCall)(async (request) => {
     console.log("receiveInventory request", {
         workspaceId,
         locationId,
+        vendorName,
+        referenceNumber,
         lines,
         note,
     });
@@ -29,7 +37,9 @@ exports.receiveInventory = (0, https_1.onCall)(async (request) => {
         return await service.postReceive({
             workspaceId,
             locationId,
-            note,
+            vendorName: vendorName || undefined,
+            referenceNumber: referenceNumber || undefined,
+            note: note || undefined,
             lines,
         }, request.auth.uid, (0, makeRequestId_1.makeRequestId)());
     }

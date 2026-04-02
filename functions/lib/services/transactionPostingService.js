@@ -13,6 +13,7 @@ const recentActivityRepo_1 = require("../repositories/recentActivityRepo");
 const buildProductInventorySummary_1 = require("../builders/buildProductInventorySummary");
 const buildLocationInventorySummary_1 = require("../builders/buildLocationInventorySummary");
 const buildRecentActivity_1 = require("../builders/buildRecentActivity");
+const vendorRepo_1 = require("../repositories/vendorRepo");
 class TransactionPostingService {
     constructor() {
         this.locationRepo = new locationRepo_1.LocationRepo();
@@ -22,6 +23,7 @@ class TransactionPostingService {
         this.productSummaryRepo = new productInventorySummaryRepo_1.ProductInventorySummaryRepo();
         this.locationSummaryRepo = new locationInventorySummaryRepo_1.LocationInventorySummaryRepo();
         this.recentActivityRepo = new recentActivityRepo_1.RecentActivityRepo();
+        this.vendorRepo = new vendorRepo_1.VendorRepo();
     }
     async refreshProductSummaries(workspaceId, productIds) {
         const uniqueProductIds = [...new Set(productIds)];
@@ -46,7 +48,7 @@ class TransactionPostingService {
         await this.locationSummaryRepo.set(workspaceId, location.id, summary);
     }
     async postReceive(input, postedBy, requestId) {
-        var _a, _b, _c;
+        var _a, _b, _c, _d, _e, _f;
         if (!input.lines.length) {
             throw new https_1.HttpsError("invalid-argument", "At least one line is required.");
         }
@@ -65,7 +67,11 @@ class TransactionPostingService {
             referenceType: "manual",
             sourceLocationId: null,
             targetLocationId: input.locationId,
+            targetLocationName: location.name,
             note: (_c = input.note) !== null && _c !== void 0 ? _c : "",
+            vendorName: (_d = input.vendorName) !== null && _d !== void 0 ? _d : "",
+            referenceNumber: (_e = input.referenceNumber) !== null && _e !== void 0 ? _e : "",
+            lineCount: hydratedLines.length,
             postedBy,
             postedAt,
             requestId,
@@ -83,11 +89,16 @@ class TransactionPostingService {
             workspaceId: input.workspaceId,
             type: "receive",
             title: `Received ${hydratedLines.length} item${hydratedLines.length === 1 ? "" : "s"}`,
-            subtitle: location.name,
+            subtitle: input.vendorName
+                ? `${input.vendorName} → ${location.name}`
+                : location.name,
             locationId: location.id,
             actorUserId: postedBy,
             createdAt: postedAt,
         }));
+        if ((_f = input.vendorName) === null || _f === void 0 ? void 0 : _f.trim()) {
+            await this.vendorRepo.upsertFromReceive(input.workspaceId, input.vendorName, postedAt);
+        }
         return {
             ok: true,
             transactionId,
@@ -145,6 +156,7 @@ class TransactionPostingService {
                     sku: product.sku,
                     quantity: quantityDelta,
                     barcode: (_d = input.barcode) !== null && _d !== void 0 ? _d : null,
+                    reasonCode: "count_variance",
                     note: (_e = input.note) !== null && _e !== void 0 ? _e : `Cycle count set quantity to ${countedQuantity}`,
                 },
             ]);
@@ -179,7 +191,7 @@ class TransactionPostingService {
             postedAt: postedAt.toDate().toISOString(),
         };
     }
-    async postAdjust(input, postedBy, requestId) {
+    async postAdjust(input, adjustedBy, requestId) {
         var _a;
         if (!input.lines.length) {
             throw new https_1.HttpsError("invalid-argument", "At least one line is required.");
@@ -191,7 +203,7 @@ class TransactionPostingService {
                 throw new https_1.HttpsError("invalid-argument", "Adjustment quantityDelta must be a non-zero number.");
             }
             const product = await this.productRepo.getById(input.workspaceId, line.productId);
-            hydratedLines.push(Object.assign(Object.assign({ productId: line.productId, sku: product.sku, quantity: line.quantityDelta, barcode: (_a = line.barcode) !== null && _a !== void 0 ? _a : null }, (line.note ? { note: line.note } : {})), { product }));
+            hydratedLines.push(Object.assign(Object.assign({ productId: line.productId, sku: product.sku, quantityDelta: line.quantityDelta, barcode: (_a = line.barcode) !== null && _a !== void 0 ? _a : null, reasonCode: line.reasonCode }, (line.note ? { note: line.note } : {})), { product }));
         }
         const postedAt = firestore_1.Timestamp.now();
         const transactionId = await firestore_1.db.runTransaction(async (tx) => {
@@ -200,8 +212,8 @@ class TransactionPostingService {
                 const balance = await this.balanceRepo.getInTransaction(tx, input.workspaceId, input.locationId, line.productId);
                 const currentOnHand = (_a = balance === null || balance === void 0 ? void 0 : balance.onHand) !== null && _a !== void 0 ? _a : 0;
                 const currentAvailable = (_b = balance === null || balance === void 0 ? void 0 : balance.available) !== null && _b !== void 0 ? _b : 0;
-                const nextOnHand = currentOnHand + line.quantity;
-                const nextAvailable = currentAvailable + line.quantity;
+                const nextOnHand = currentOnHand + line.quantityDelta;
+                const nextAvailable = currentAvailable + line.quantityDelta;
                 if (nextOnHand < 0 || nextAvailable < 0) {
                     throw new https_1.HttpsError("failed-precondition", `Adjustment would make inventory negative for SKU ${line.sku}.`);
                 }
@@ -210,8 +222,8 @@ class TransactionPostingService {
                 const balance = await this.balanceRepo.getInTransaction(tx, input.workspaceId, input.locationId, line.productId);
                 const currentOnHand = (_c = balance === null || balance === void 0 ? void 0 : balance.onHand) !== null && _c !== void 0 ? _c : 0;
                 const currentAvailable = (_d = balance === null || balance === void 0 ? void 0 : balance.available) !== null && _d !== void 0 ? _d : 0;
-                const nextOnHand = currentOnHand + line.quantity;
-                const nextAvailable = currentAvailable + line.quantity;
+                const nextOnHand = currentOnHand + line.quantityDelta;
+                const nextAvailable = currentAvailable + line.quantityDelta;
                 this.balanceRepo.setAbsoluteInTransaction(tx, {
                     workspaceId: input.workspaceId,
                     location,
@@ -227,13 +239,13 @@ class TransactionPostingService {
                 sourceLocationId: null,
                 targetLocationId: input.locationId,
                 note: (_e = input.note) !== null && _e !== void 0 ? _e : "",
-                postedBy,
+                postedBy: adjustedBy,
                 postedAt,
                 requestId,
                 relatedTransactionGroupId: null,
             }, hydratedLines.map((line) => {
-                var _a;
-                return (Object.assign({ productId: line.productId, sku: line.sku, quantity: line.quantity, barcode: (_a = line.barcode) !== null && _a !== void 0 ? _a : null }, (line.note ? { note: line.note } : {})));
+                var _a, _b;
+                return (Object.assign({ productId: line.productId, sku: line.sku, quantity: line.quantityDelta, barcode: (_a = line.barcode) !== null && _a !== void 0 ? _a : null, reasonCode: (_b = line.reasonCode) !== null && _b !== void 0 ? _b : null }, (line.note ? { note: line.note } : {})));
             }));
         });
         await this.refreshProductSummaries(input.workspaceId, hydratedLines.map((line) => line.productId));
@@ -244,7 +256,7 @@ class TransactionPostingService {
             title: `Adjusted ${hydratedLines.length} item${hydratedLines.length === 1 ? "" : "s"}`,
             subtitle: location.name,
             locationId: location.id,
-            actorUserId: postedBy,
+            actorUserId: adjustedBy,
             createdAt: postedAt,
         }));
         return {

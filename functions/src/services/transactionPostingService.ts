@@ -18,6 +18,7 @@ import { buildProductInventorySummary } from "../builders/buildProductInventoryS
 import { buildLocationInventorySummary } from "../builders/buildLocationInventorySummary";
 import { buildRecentActivity } from "../builders/buildRecentActivity";
 import type { AdjustmentReasonCode } from "../contracts/enums";
+import { VendorRepo } from "../repositories/vendorRepo";
 
 type HydratedReceiveLine = {
   productId: string;
@@ -65,7 +66,7 @@ export class TransactionPostingService {
   private productSummaryRepo = new ProductInventorySummaryRepo();
   private locationSummaryRepo = new LocationInventorySummaryRepo();
   private recentActivityRepo = new RecentActivityRepo();
-
+private vendorRepo = new VendorRepo();
   private async refreshProductSummaries(
     workspaceId: string,
     productIds: string[]
@@ -146,16 +147,20 @@ export class TransactionPostingService {
     const transactionId = await this.transactionRepo.create(
       input.workspaceId,
       {
-        type: "receive",
-        referenceType: "manual",
-        sourceLocationId: null,
-        targetLocationId: input.locationId,
-        note: input.note ?? "",
-        postedBy,
-        postedAt,
-        requestId,
-        relatedTransactionGroupId: null,
-      },
+ type: "receive",
+  referenceType: "manual",
+  sourceLocationId: null,
+  targetLocationId: input.locationId,
+  targetLocationName: location.name,
+  note: input.note ?? "",
+  vendorName: input.vendorName ?? "",
+  referenceNumber: input.referenceNumber ?? "",
+  lineCount: hydratedLines.length,
+  postedBy,
+  postedAt,
+  requestId,
+  relatedTransactionGroupId: null,
+},
       hydratedLines.map((line) => ({
         productId: line.productId,
         sku: line.sku,
@@ -183,27 +188,37 @@ export class TransactionPostingService {
 
     await this.refreshLocationSummary(input.workspaceId, location);
 
-    await this.recentActivityRepo.create(
-      input.workspaceId,
-      buildRecentActivity({
-        workspaceId: input.workspaceId,
-        type: "receive",
-        title: `Received ${hydratedLines.length} item${
-          hydratedLines.length === 1 ? "" : "s"
-        }`,
-        subtitle: location.name,
-        locationId: location.id,
-        actorUserId: postedBy,
-        createdAt: postedAt,
-      })
-    );
+await this.recentActivityRepo.create(
+  input.workspaceId,
+  buildRecentActivity({
+    workspaceId: input.workspaceId,
+    type: "receive",
+    title: `Received ${hydratedLines.length} item${
+      hydratedLines.length === 1 ? "" : "s"
+    }`,
+    subtitle: input.vendorName
+      ? `${input.vendorName} → ${location.name}`
+      : location.name,
+    locationId: location.id,
+    actorUserId: postedBy,
+    createdAt: postedAt,
+  })
+);
 
-    return {
-      ok: true,
-      transactionId,
-      postedAt: postedAt.toDate().toISOString(),
-      lineCount: hydratedLines.length,
-    };
+if (input.vendorName?.trim()) {
+  await this.vendorRepo.upsertFromReceive(
+    input.workspaceId,
+    input.vendorName,
+    postedAt
+  );
+}
+
+return {
+  ok: true,
+  transactionId,
+  postedAt: postedAt.toDate().toISOString(),
+  lineCount: hydratedLines.length,
+};
   }
 
   async postCount(
@@ -297,6 +312,7 @@ export class TransactionPostingService {
             sku: product.sku,
             quantity: quantityDelta,
             barcode: input.barcode ?? null,
+            reasonCode: "count_variance",
             note: input.note ?? `Cycle count set quantity to ${countedQuantity}`,
           },
         ]
@@ -326,7 +342,9 @@ export class TransactionPostingService {
         locationId: location.id,
         actorUserId: postedBy,
         createdAt: postedAt,
+        
       })
+      
     );
 
     return {
@@ -375,7 +393,7 @@ export class TransactionPostingService {
         sku: product.sku,
         quantityDelta: line.quantityDelta,
         barcode: line.barcode ?? null,
-reasonCode: (line as any).reasonCode,
+        reasonCode: (line as any).reasonCode,
         ...(line.note ? { note: line.note } : {}),
         product,
       });

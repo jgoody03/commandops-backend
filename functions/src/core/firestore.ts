@@ -53,3 +53,6 @@ export function locationInventorySummaryCol(workspaceId: string) {
 export function recentActivityCol(workspaceId: string) {
   return workspaceRef(workspaceId).collection("recentActivity");
 }
+export function vendorsCol(workspaceId: string) {
+  return workspaceRef(workspaceId).collection("vendors");
+}

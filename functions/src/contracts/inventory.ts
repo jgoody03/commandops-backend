@@ -2,7 +2,6 @@ import { Timestamp } from "firebase-admin/firestore";
 import { InventoryTransactionType, ReferenceType } from "./enums";
 import { AdjustmentReasonCode } from "./enums";
 
-
 export type StockStatus = "ok" | "low" | "out";
 
 export interface InventoryBalanceDoc {
@@ -43,6 +42,8 @@ export interface InventoryTransactionDoc {
   sourceLocationId?: string | null;
   targetLocationId?: string | null;
   note?: string;
+  vendorName?: string;
+  referenceNumber?: string;
   postedBy: string;
   postedAt: Timestamp;
   requestId: string;
@@ -56,52 +57,31 @@ export interface InventoryTransactionLineDoc {
   quantity: number;
   unitCost?: number | null;
   barcode?: string | null;
+  reasonCode?: AdjustmentReasonCode | null;
   note?: string;
 }
+
+export type PostReceiveInventoryLineInput = {
+  productId: string;
+  quantity: number;
+  unitCost?: number | null;
+  barcode?: string;
+  note?: string;
+};
 
 export interface PostReceiveInventoryInput {
   workspaceId: string;
   locationId: string;
+  vendorName?: string;
+  referenceNumber?: string;
   note?: string;
-  lines: Array<{
-    productId: string;
-    quantity: number;
-    unitCost?: number;
-    barcode?: string;
-    note?: string;
-  }>;
+  lines: PostReceiveInventoryLineInput[];
 }
 
 export interface PostMoveInventoryInput {
   workspaceId: string;
   sourceLocationId: string;
   targetLocationId: string;
-  note?: string;
-  lines: Array<{
-    productId: string;
-    quantity: number;
-    barcode?: string;
-    note?: string;
-  }>;
-}
-
-export interface PostAdjustInventoryInput {
-  workspaceId: string;
-  locationId: string;
-  note?: string;
-  lines: Array<{
-    productId: string;
-    quantityDelta: number;
-    barcode?: string;
-    note?: string;
-  }>;
-}
-
-export interface PostSaleInventoryInput {
-  workspaceId: string;
-  locationId: string;
-  saleId?: string;
-  orderNumber?: string;
   note?: string;
   lines: Array<{
     productId: string;
@@ -119,8 +99,53 @@ export type AdjustInventoryLineInput = {
   note?: string;
 };
 
+export interface PostAdjustInventoryInput {
+  workspaceId: string;
+  locationId: string;
+  note?: string;
+  lines: AdjustInventoryLineInput[];
+}
+
+export interface PostSaleInventoryInput {
+  workspaceId: string;
+  locationId: string;
+  saleId?: string;
+  orderNumber?: string;
+  note?: string;
+  lines: Array<{
+    productId: string;
+    quantity: number;
+    barcode?: string;
+    note?: string;
+  }>;
+}
+
 export type AdjustInventoryInput = {
   workspaceId: string;
   locationId: string;
   lines: AdjustInventoryLineInput[];
 };
+
+export type PostReceiveInventoryOutput = {
+  ok: boolean;
+  transactionId: string;
+  postedAt: string;
+  lineCount: number;
+};
+
+export interface InventoryTransactionDoc {
+  type: InventoryTransactionType;
+  referenceType: ReferenceType;
+  sourceLocationId?: string | null;
+  targetLocationId?: string | null;
+  targetLocationName?: string;
+  note?: string;
+  vendorName?: string;
+  referenceNumber?: string;
+  lineCount?: number;
+  postedBy: string;
+  postedAt: Timestamp;
+  requestId: string;
+  createdAt: Timestamp;
+  relatedTransactionGroupId?: string | null;
+}

@@ -24,3 +24,6 @@ export { getMoveSuggestions } from "./functions/getMoveSuggestions";
 export { createLocation } from "./functions/createLocation";
 export { getLocations } from "./functions/getLocations";
 export { completeOnboarding } from "./functions/completeOnboarding";
+export { listVendors } from "./functions/listVendors";
+export { getReceiveHistory } from "./functions/getReceiveHistory";
+export { getReceiveDetail } from "./functions/getReceiveDetail";
