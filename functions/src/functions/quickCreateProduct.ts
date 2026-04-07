@@ -18,10 +18,23 @@ export const quickCreateProduct = onCall(async (request) => {
     ? String(request.data.primaryBarcode).trim()
     : null;
 
+  const rawPrice = request.data.price;
+  const price =
+    rawPrice === undefined || rawPrice === null || rawPrice === ""
+      ? null
+      : Number(rawPrice);
+
   if (!workspaceId || !sku || !name) {
     throw new HttpsError(
       "invalid-argument",
       "workspaceId, sku, and name are required."
+    );
+  }
+
+  if (price !== null && (!Number.isFinite(price) || price < 0)) {
+    throw new HttpsError(
+      "invalid-argument",
+      "price must be a valid number greater than or equal to 0."
     );
   }
 
@@ -32,6 +45,7 @@ export const quickCreateProduct = onCall(async (request) => {
     name,
     primaryBarcode,
     unit: "each",
+    price,
   });
 
   if (primaryBarcode) {

@@ -34,6 +34,7 @@ type HydratedSaleLine = {
   productId: string;
   sku: string;
   quantity: number;
+  unitPrice?: number | null;
   barcode?: string | null;
   note?: string;
   product: Awaited<ReturnType<ProductRepo["getById"]>>;
@@ -533,14 +534,15 @@ return {
         line.productId
       );
 
-      hydratedLines.push({
-        productId: line.productId,
-        sku: product.sku,
-        quantity: line.quantity,
-        barcode: line.barcode ?? null,
-        ...(line.note ? { note: line.note } : {}),
-        product,
-      });
+hydratedLines.push({
+  productId: line.productId,
+  sku: product.sku,
+  quantity: line.quantity,
+  unitPrice: line.unitPrice ?? product.price ?? null,
+  barcode: line.barcode ?? null,
+  ...(line.note ? { note: line.note } : {}),
+  product,
+});
     }
 
     const postedAt = Timestamp.now();
@@ -602,24 +604,30 @@ return {
       return this.transactionRepo.createInTransaction(
         tx,
         input.workspaceId,
-        {
-          type: "sale",
-          referenceType: "api",
-          sourceLocationId: input.locationId,
-          targetLocationId: null,
-          note: input.note ?? input.orderNumber ?? input.saleId ?? "",
-          postedBy,
-          postedAt,
-          requestId,
-          relatedTransactionGroupId: null,
-        },
-        hydratedLines.map((line) => ({
-          productId: line.productId,
-          sku: line.sku,
-          quantity: line.quantity,
-          barcode: line.barcode ?? null,
-          ...(line.note ? { note: line.note } : {}),
-        }))
+{
+  type: "sale",
+  referenceType: "api",
+  sourceLocationId: input.locationId,
+  targetLocationId: null,
+  targetLocationName: location.name,
+  note: input.note ?? input.orderNumber ?? input.saleId ?? "",
+  saleId: input.saleId ?? "",
+  orderNumber: input.orderNumber ?? "",
+  tenderType: input.tenderType ?? "other",
+  lineCount: hydratedLines.length,
+  postedBy,
+  postedAt,
+  requestId,
+  relatedTransactionGroupId: null,
+},
+hydratedLines.map((line) => ({
+  productId: line.productId,
+  sku: line.sku,
+  quantity: line.quantity,
+  unitPrice: line.unitPrice ?? null,
+  barcode: line.barcode ?? null,
+  ...(line.note ? { note: line.note } : {}),
+}))
       );
     });
 

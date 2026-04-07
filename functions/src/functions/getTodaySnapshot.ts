@@ -5,6 +5,7 @@ import {
   locationInventorySummaryCol,
   productInventorySummaryCol,
   recentActivityCol,
+  transactionsCol,
 } from "../core/firestore";
 import { ProductInventorySummaryDoc } from "../contracts/inventorySummaries";
 import { RecentActivityDoc } from "../contracts/activity";
@@ -12,6 +13,7 @@ import {
   GetTodaySnapshotResult,
   RecentActivityFeedItem,
 } from "../contracts/dashboard";
+import { InventoryTransactionLineDoc } from "../contracts/inventory";
 
 function requireAuth(uid?: string): string {
   if (!uid) {
@@ -35,6 +37,14 @@ function startOfTodayUtc(): Timestamp {
   const now = new Date();
   const start = new Date(
     Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0, 0)
+  );
+  return Timestamp.fromDate(start);
+}
+
+function startOfTomorrowUtc(): Timestamp {
+  const now = new Date();
+  const start = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1, 0, 0, 0, 0)
   );
   return Timestamp.fromDate(start);
 }
@@ -68,19 +78,30 @@ export const getTodaySnapshot = onCall(
     await assertWorkspaceMembership(workspaceId, uid);
 
     const todayStart = startOfTodayUtc();
+    const tomorrowStart = startOfTomorrowUtc();
 
-    const [productSummarySnap, locationSummarySnap, todayActivitySnap, recentSnap] =
-      await Promise.all([
-        productInventorySummaryCol(workspaceId).get(),
-        locationInventorySummaryCol(workspaceId).get(),
-        recentActivityCol(workspaceId)
-          .where("createdAt", ">=", todayStart)
-          .get(),
-        recentActivityCol(workspaceId)
-          .orderBy("createdAt", "desc")
-          .limit(10)
-          .get(),
-      ]);
+    const [
+      productSummarySnap,
+      locationSummarySnap,
+      todayActivitySnap,
+      recentSnap,
+      todaySalesSnap,
+    ] = await Promise.all([
+      productInventorySummaryCol(workspaceId).get(),
+      locationInventorySummaryCol(workspaceId).get(),
+      recentActivityCol(workspaceId)
+        .where("createdAt", ">=", todayStart)
+        .get(),
+      recentActivityCol(workspaceId)
+        .orderBy("createdAt", "desc")
+        .limit(10)
+        .get(),
+      transactionsCol(workspaceId)
+        .where("type", "==", "sale")
+        .where("postedAt", ">=", todayStart)
+        .where("postedAt", "<", tomorrowStart)
+        .get(),
+    ]);
 
     let totalUnits = 0;
     let lowStockProducts = 0;
@@ -125,6 +146,23 @@ export const getTodaySnapshot = onCall(
       }
     }
 
+    let salesTodayCount = todaySalesSnap.size;
+    let unitsSoldToday = 0;
+    let salesTodayRevenue = 0;
+
+    for (const saleDoc of todaySalesSnap.docs) {
+      const linesSnap = await saleDoc.ref.collection("lines").get();
+
+      for (const lineDoc of linesSnap.docs) {
+        const line = lineDoc.data() as InventoryTransactionLineDoc;
+        const quantity = Number(line.quantity ?? 0);
+        const unitPrice = Number(line.unitPrice ?? 0);
+
+        unitsSoldToday += quantity;
+        salesTodayRevenue += quantity * unitPrice;
+      }
+    }
+
     const recentActivity: RecentActivityFeedItem[] = recentSnap.docs.map((doc) =>
       toRecentActivityItem(doc.id, doc.data() as RecentActivityDoc)
     );
@@ -145,6 +183,11 @@ export const getTodaySnapshot = onCall(
         quickCreateCount,
         saleCount,
         totalCount: todayActivitySnap.size,
+      },
+      sales: {
+        salesTodayCount,
+        unitsSoldToday,
+        salesTodayRevenue,
       },
       recentActivity,
       generatedAtMs: Date.now(),

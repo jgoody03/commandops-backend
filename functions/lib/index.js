@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getReceiveDetail = exports.getReceiveHistory = exports.listVendors = exports.completeOnboarding = exports.getLocations = exports.createLocation = exports.getMoveSuggestions = exports.countInventory = exports.getLocationOptions = exports.getReplenishmentRecommendations = exports.getProductDetailSnapshot = exports.ingestPosSale = exports.getLocationDetailSnapshot = exports.getLowStockProducts = exports.getTodaySnapshot = exports.getRecentActivityFeed = exports.getLocationSummaryList = exports.getProductSummaryList = exports.getLocationInventory = exports.searchProducts = exports.getProductByBarcode = exports.getInventoryBalances = exports.adjustInventory = exports.moveInventory = exports.bootstrapWorkspace = exports.receiveInventory = exports.quickCreateProduct = exports.resolveScanCode = exports.getMyWorkspaceContext = void 0;
+exports.getVendorReceiveHistory = exports.getReceiveDetail = exports.getReceiveHistory = exports.listVendors = exports.completeOnboarding = exports.getLocations = exports.createLocation = exports.getMoveSuggestions = exports.countInventory = exports.getLocationOptions = exports.getReplenishmentRecommendations = exports.getProductDetailSnapshot = exports.ingestPosSale = exports.getLocationDetailSnapshot = exports.getLowStockProducts = exports.getTodaySnapshot = exports.getRecentActivityFeed = exports.getLocationSummaryList = exports.getProductSummaryList = exports.getLocationInventory = exports.searchProducts = exports.getProductByBarcode = exports.getInventoryBalances = exports.adjustInventory = exports.moveInventory = exports.bootstrapWorkspace = exports.receiveInventory = exports.quickCreateProduct = exports.resolveScanCode = exports.getMyWorkspaceContext = void 0;
 var getMyWorkspaceContext_1 = require("./functions/getMyWorkspaceContext");
 Object.defineProperty(exports, "getMyWorkspaceContext", { enumerable: true, get: function () { return getMyWorkspaceContext_1.getMyWorkspaceContext; } });
 var resolveScanCode_1 = require("./functions/resolveScanCode");
@@ -59,4 +59,6 @@ var getReceiveHistory_1 = require("./functions/getReceiveHistory");
 Object.defineProperty(exports, "getReceiveHistory", { enumerable: true, get: function () { return getReceiveHistory_1.getReceiveHistory; } });
 var getReceiveDetail_1 = require("./functions/getReceiveDetail");
 Object.defineProperty(exports, "getReceiveDetail", { enumerable: true, get: function () { return getReceiveDetail_1.getReceiveDetail; } });
+var getVendorReceiveHistory_1 = require("./functions/getVendorReceiveHistory");
+Object.defineProperty(exports, "getVendorReceiveHistory", { enumerable: true, get: function () { return getVendorReceiveHistory_1.getVendorReceiveHistory; } });
 //# sourceMappingURL=index.js.map

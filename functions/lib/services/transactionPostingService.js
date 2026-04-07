@@ -268,7 +268,7 @@ class TransactionPostingService {
         };
     }
     async postSale(input, postedBy, requestId) {
-        var _a;
+        var _a, _b, _c;
         if (!input.lines.length) {
             throw new https_1.HttpsError("invalid-argument", "At least one line is required.");
         }
@@ -279,11 +279,11 @@ class TransactionPostingService {
                 throw new https_1.HttpsError("invalid-argument", "Sale quantity must be greater than zero.");
             }
             const product = await this.productRepo.getById(input.workspaceId, line.productId);
-            hydratedLines.push(Object.assign(Object.assign({ productId: line.productId, sku: product.sku, quantity: line.quantity, barcode: (_a = line.barcode) !== null && _a !== void 0 ? _a : null }, (line.note ? { note: line.note } : {})), { product }));
+            hydratedLines.push(Object.assign(Object.assign({ productId: line.productId, sku: product.sku, quantity: line.quantity, unitPrice: (_b = (_a = line.unitPrice) !== null && _a !== void 0 ? _a : product.price) !== null && _b !== void 0 ? _b : null, barcode: (_c = line.barcode) !== null && _c !== void 0 ? _c : null }, (line.note ? { note: line.note } : {})), { product }));
         }
         const postedAt = firestore_1.Timestamp.now();
         const transactionId = await firestore_1.db.runTransaction(async (tx) => {
-            var _a, _b, _c, _d, _e, _f, _g;
+            var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k;
             for (const line of hydratedLines) {
                 const balance = await this.balanceRepo.getInTransaction(tx, input.workspaceId, input.locationId, line.productId);
                 const currentOnHand = (_a = balance === null || balance === void 0 ? void 0 : balance.onHand) !== null && _a !== void 0 ? _a : 0;
@@ -316,14 +316,19 @@ class TransactionPostingService {
                 referenceType: "api",
                 sourceLocationId: input.locationId,
                 targetLocationId: null,
+                targetLocationName: location.name,
                 note: (_g = (_f = (_e = input.note) !== null && _e !== void 0 ? _e : input.orderNumber) !== null && _f !== void 0 ? _f : input.saleId) !== null && _g !== void 0 ? _g : "",
+                saleId: (_h = input.saleId) !== null && _h !== void 0 ? _h : "",
+                orderNumber: (_j = input.orderNumber) !== null && _j !== void 0 ? _j : "",
+                tenderType: (_k = input.tenderType) !== null && _k !== void 0 ? _k : "other",
+                lineCount: hydratedLines.length,
                 postedBy,
                 postedAt,
                 requestId,
                 relatedTransactionGroupId: null,
             }, hydratedLines.map((line) => {
-                var _a;
-                return (Object.assign({ productId: line.productId, sku: line.sku, quantity: line.quantity, barcode: (_a = line.barcode) !== null && _a !== void 0 ? _a : null }, (line.note ? { note: line.note } : {})));
+                var _a, _b;
+                return (Object.assign({ productId: line.productId, sku: line.sku, quantity: line.quantity, unitPrice: (_a = line.unitPrice) !== null && _a !== void 0 ? _a : null, barcode: (_b = line.barcode) !== null && _b !== void 0 ? _b : null }, (line.note ? { note: line.note } : {})));
             }));
         });
         await this.refreshProductSummaries(input.workspaceId, hydratedLines.map((line) => line.productId));

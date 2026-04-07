@@ -27,6 +27,7 @@ export class BarcodeResolutionService {
           productId: string;
           sku: string;
           productName: string;
+          price?: number | null;
         }
       | {
           resolutionStatus: "unresolved";
@@ -43,6 +44,7 @@ export class BarcodeResolutionService {
         productId: String(barcodeHit.productId),
         sku: product.sku,
         productName: product.name,
+        price: product.price ?? null,
       };
     } else {
       result = { resolutionStatus: "unresolved" };

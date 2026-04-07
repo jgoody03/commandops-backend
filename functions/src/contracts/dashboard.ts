@@ -106,6 +106,7 @@ export type GetRecentActivityFeedResult = {
   nextCursor: ActivityFeedCursor | null;
 };
 
+
 export type GetTodaySnapshotPayload = {
   workspaceId: string;
 };
@@ -197,6 +198,11 @@ export type GetTodaySnapshotResult = {
     quickCreateCount: number;
     saleCount: number;
     totalCount: number;
+  };
+  sales: {
+    salesTodayCount: number;
+    unitsSoldToday: number;
+    salesTodayRevenue: number;
   };
   recentActivity: RecentActivityFeedItem[];
   generatedAtMs: number;

@@ -25,3 +25,24 @@ export interface VendorListItem {
 export interface ListVendorsOutput {
   items: VendorListItem[];
 }
+
+export interface GetVendorReceiveHistoryInput {
+  workspaceId: string;
+  vendorName: string;
+  limit?: number;
+}
+
+export interface VendorReceiveHistoryItem {
+  transactionId: string;
+  locationId?: string | null;
+  locationName?: string | null;
+  referenceNumber?: string | null;
+  note?: string | null;
+  lineCount?: number;
+  postedAtMs: number;
+}
+
+export interface GetVendorReceiveHistoryOutput {
+  vendorName: string;
+  items: VendorReceiveHistoryItem[];
+}

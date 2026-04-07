@@ -56,6 +56,7 @@ export interface InventoryTransactionLineDoc {
   sku: string;
   quantity: number;
   unitCost?: number | null;
+  unitPrice?: number | null;
   barcode?: string | null;
   reasonCode?: AdjustmentReasonCode | null;
   note?: string;
@@ -111,11 +112,13 @@ export interface PostSaleInventoryInput {
   locationId: string;
   saleId?: string;
   orderNumber?: string;
+  tenderType?: "cash" | "card" | "other";
   note?: string;
   lines: Array<{
     productId: string;
     quantity: number;
     barcode?: string;
+    unitPrice?: number | null;
     note?: string;
   }>;
 }
@@ -142,6 +145,9 @@ export interface InventoryTransactionDoc {
   note?: string;
   vendorName?: string;
   referenceNumber?: string;
+  saleId?: string;
+  orderNumber?: string;
+  tenderType?: "cash" | "card" | "other";
   lineCount?: number;
   postedBy: string;
   postedAt: Timestamp;

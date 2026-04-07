@@ -27,3 +27,4 @@ export { completeOnboarding } from "./functions/completeOnboarding";
 export { listVendors } from "./functions/listVendors";
 export { getReceiveHistory } from "./functions/getReceiveHistory";
 export { getReceiveDetail } from "./functions/getReceiveDetail";
+export { getVendorReceiveHistory } from "./functions/getVendorReceiveHistory";

@@ -18,8 +18,15 @@ exports.quickCreateProduct = (0, https_1.onCall)(async (request) => {
     const primaryBarcode = request.data.primaryBarcode
         ? String(request.data.primaryBarcode).trim()
         : null;
+    const rawPrice = request.data.price;
+    const price = rawPrice === undefined || rawPrice === null || rawPrice === ""
+        ? null
+        : Number(rawPrice);
     if (!workspaceId || !sku || !name) {
         throw new https_1.HttpsError("invalid-argument", "workspaceId, sku, and name are required.");
+    }
+    if (price !== null && (!Number.isFinite(price) || price < 0)) {
+        throw new https_1.HttpsError("invalid-argument", "price must be a valid number greater than or equal to 0.");
     }
     await (0, auth_1.assertWorkspaceMembership)(workspaceId, request.auth.uid);
     const product = await productRepo.create(workspaceId, {
@@ -27,6 +34,7 @@ exports.quickCreateProduct = (0, https_1.onCall)(async (request) => {
         name,
         primaryBarcode,
         unit: "each",
+        price,
     });
     if (primaryBarcode) {
         await barcodeRepo.upsert(workspaceId, primaryBarcode, product.id, product.sku);

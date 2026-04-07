@@ -17,21 +17,53 @@ exports.ingestPosSale = (0, https_1.onCall)(async (request) => {
     const orderNumber = request.data.orderNumber
         ? String(request.data.orderNumber).trim()
         : "";
-    const lines = Array.isArray(request.data.lines) ? request.data.lines : [];
-    const note = request.data.note ? String(request.data.note) : "";
+    const note = request.data.note ? String(request.data.note).trim() : "";
+    const tenderTypeValue = request.data.tenderType
+        ? String(request.data.tenderType).trim()
+        : "";
+    const tenderType = (["cash", "card", "other"].includes(tenderTypeValue)
+        ? tenderTypeValue
+        : undefined);
+    const rawLines = Array.isArray(request.data.lines)
+        ? request.data.lines
+        : [];
     if (!workspaceId || !locationId) {
         throw new https_1.HttpsError("invalid-argument", "workspaceId and locationId are required.");
     }
-    if (!lines.length) {
+    if (!rawLines.length) {
         throw new https_1.HttpsError("invalid-argument", "At least one sale line is required.");
     }
     await (0, auth_1.assertWorkspaceMembership)(workspaceId, request.auth.uid);
+    const lines = rawLines.map((line) => ({
+        productId: String(line.productId || "").trim(),
+        quantity: Number(line.quantity || 0),
+        barcode: line.barcode ? String(line.barcode).trim() : undefined,
+        unitPrice: line.unitPrice === undefined ||
+            line.unitPrice === null ||
+            line.unitPrice === ""
+            ? undefined
+            : Number(line.unitPrice),
+        note: line.note ? String(line.note).trim() : undefined,
+    }));
+    for (const line of lines) {
+        if (!line.productId) {
+            throw new https_1.HttpsError("invalid-argument", "Each sale line must include productId.");
+        }
+        if (!Number.isFinite(line.quantity) || line.quantity <= 0) {
+            throw new https_1.HttpsError("invalid-argument", "Each sale line must include a quantity greater than zero.");
+        }
+        if (line.unitPrice !== undefined &&
+            (!Number.isFinite(line.unitPrice) || line.unitPrice < 0)) {
+            throw new https_1.HttpsError("invalid-argument", "unitPrice must be a valid number greater than or equal to 0.");
+        }
+    }
     return service.postSale({
         workspaceId,
         locationId,
         saleId: saleId || undefined,
         orderNumber: orderNumber || undefined,
-        note,
+        tenderType,
+        note: note || undefined,
         lines,
     }, request.auth.uid, (0, makeRequestId_1.makeRequestId)());
 });

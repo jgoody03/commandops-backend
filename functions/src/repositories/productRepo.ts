@@ -19,22 +19,24 @@ export class ProductRepo {
       throw new HttpsError("already-exists", "SKU already exists.");
     }
 
-    const doc: ProductDoc = {
-      sku,
-      skuLower: sku.toLowerCase(),
-      name,
-      nameLower: name.toLowerCase(),
-      description: input.description?.trim() || "",
-      primaryBarcode: input.primaryBarcode ?? null,
-      barcodeAliases: input.barcodeAliases ?? [],
-      unit: input.unit ?? "each",
-      isActive: true,
-      lowStockThreshold: input.lowStockThreshold ?? null,
-      reorderPoint: input.reorderPoint ?? null,
-      reorderQuantity: input.reorderQuantity ?? null,
-      createdAt: now,
-      updatedAt: now,
-    };
+const doc: ProductDoc = {
+  workspaceId,
+  sku,
+  skuLower: sku.toLowerCase(),
+  name,
+  nameLower: name.toLowerCase(),
+  description: input.description?.trim() || "",
+  primaryBarcode: input.primaryBarcode ?? null,
+  barcodeAliases: input.barcodeAliases ?? [],
+  unit: input.unit ?? "each",
+  price: input.price ?? null,
+  isActive: true,
+  lowStockThreshold: input.lowStockThreshold ?? null,
+  reorderPoint: input.reorderPoint ?? null,
+  reorderQuantity: input.reorderQuantity ?? null,
+  createdAt: now,
+  updatedAt: now,
+};
 
     await ref.set(doc);
     return { id: ref.id, ...doc };

@@ -23,6 +23,11 @@ function startOfTodayUtc() {
     const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0, 0));
     return firestore_1.Timestamp.fromDate(start);
 }
+function startOfTomorrowUtc() {
+    const now = new Date();
+    const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1, 0, 0, 0, 0));
+    return firestore_1.Timestamp.fromDate(start);
+}
 function toRecentActivityItem(id, doc) {
     var _a, _b, _c, _d, _e, _f;
     return {
@@ -38,12 +43,13 @@ function toRecentActivityItem(id, doc) {
     };
 }
 exports.getTodaySnapshot = (0, https_1.onCall)(async (request) => {
-    var _a, _b, _c;
+    var _a, _b, _c, _d, _e;
     const uid = requireAuth((_a = request.auth) === null || _a === void 0 ? void 0 : _a.uid);
     const workspaceId = parseRequiredString((_b = request.data) === null || _b === void 0 ? void 0 : _b.workspaceId, "workspaceId");
     await (0, auth_1.assertWorkspaceMembership)(workspaceId, uid);
     const todayStart = startOfTodayUtc();
-    const [productSummarySnap, locationSummarySnap, todayActivitySnap, recentSnap] = await Promise.all([
+    const tomorrowStart = startOfTomorrowUtc();
+    const [productSummarySnap, locationSummarySnap, todayActivitySnap, recentSnap, todaySalesSnap,] = await Promise.all([
         (0, firestore_2.productInventorySummaryCol)(workspaceId).get(),
         (0, firestore_2.locationInventorySummaryCol)(workspaceId).get(),
         (0, firestore_2.recentActivityCol)(workspaceId)
@@ -52,6 +58,11 @@ exports.getTodaySnapshot = (0, https_1.onCall)(async (request) => {
         (0, firestore_2.recentActivityCol)(workspaceId)
             .orderBy("createdAt", "desc")
             .limit(10)
+            .get(),
+        (0, firestore_2.transactionsCol)(workspaceId)
+            .where("type", "==", "sale")
+            .where("postedAt", ">=", todayStart)
+            .where("postedAt", "<", tomorrowStart)
             .get(),
     ]);
     let totalUnits = 0;
@@ -94,6 +105,19 @@ exports.getTodaySnapshot = (0, https_1.onCall)(async (request) => {
                 break;
         }
     }
+    let salesTodayCount = todaySalesSnap.size;
+    let unitsSoldToday = 0;
+    let salesTodayRevenue = 0;
+    for (const saleDoc of todaySalesSnap.docs) {
+        const linesSnap = await saleDoc.ref.collection("lines").get();
+        for (const lineDoc of linesSnap.docs) {
+            const line = lineDoc.data();
+            const quantity = Number((_d = line.quantity) !== null && _d !== void 0 ? _d : 0);
+            const unitPrice = Number((_e = line.unitPrice) !== null && _e !== void 0 ? _e : 0);
+            unitsSoldToday += quantity;
+            salesTodayRevenue += quantity * unitPrice;
+        }
+    }
     const recentActivity = recentSnap.docs.map((doc) => toRecentActivityItem(doc.id, doc.data()));
     return {
         totals: {
@@ -111,6 +135,11 @@ exports.getTodaySnapshot = (0, https_1.onCall)(async (request) => {
             quickCreateCount,
             saleCount,
             totalCount: todayActivitySnap.size,
+        },
+        sales: {
+            salesTodayCount,
+            unitsSoldToday,
+            salesTodayRevenue,
         },
         recentActivity,
         generatedAtMs: Date.now(),

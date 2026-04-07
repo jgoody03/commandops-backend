@@ -5,7 +5,7 @@ const https_1 = require("firebase-functions/v2/https");
 const firestore_1 = require("../core/firestore");
 class ProductRepo {
     async create(workspaceId, input) {
-        var _a, _b, _c, _d, _e, _f, _g;
+        var _a, _b, _c, _d, _e, _f, _g, _h;
         const now = firestore_1.Timestamp.now();
         const ref = (0, firestore_1.productsCol)(workspaceId).doc();
         const sku = input.sku.trim().toUpperCase();
@@ -18,6 +18,7 @@ class ProductRepo {
             throw new https_1.HttpsError("already-exists", "SKU already exists.");
         }
         const doc = {
+            workspaceId,
             sku,
             skuLower: sku.toLowerCase(),
             name,
@@ -26,10 +27,11 @@ class ProductRepo {
             primaryBarcode: (_b = input.primaryBarcode) !== null && _b !== void 0 ? _b : null,
             barcodeAliases: (_c = input.barcodeAliases) !== null && _c !== void 0 ? _c : [],
             unit: (_d = input.unit) !== null && _d !== void 0 ? _d : "each",
+            price: (_e = input.price) !== null && _e !== void 0 ? _e : null,
             isActive: true,
-            lowStockThreshold: (_e = input.lowStockThreshold) !== null && _e !== void 0 ? _e : null,
-            reorderPoint: (_f = input.reorderPoint) !== null && _f !== void 0 ? _f : null,
-            reorderQuantity: (_g = input.reorderQuantity) !== null && _g !== void 0 ? _g : null,
+            lowStockThreshold: (_f = input.lowStockThreshold) !== null && _f !== void 0 ? _f : null,
+            reorderPoint: (_g = input.reorderPoint) !== null && _g !== void 0 ? _g : null,
+            reorderQuantity: (_h = input.reorderQuantity) !== null && _h !== void 0 ? _h : null,
             createdAt: now,
             updatedAt: now,
         };
